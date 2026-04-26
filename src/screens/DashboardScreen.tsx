@@ -356,7 +356,15 @@ function BottomTabItem({ label, icon, active, onPress }: BottomTabItemProps) {
         size={18}
         style={[styles.bottomTabIcon, active && styles.bottomTabIconActive]}
       />
-      <Text style={[styles.bottomTabLabel, active && styles.bottomTabLabelActive]}>{label}</Text>
+      <View style={styles.bottomTabLabelWrap}>
+        <Text
+          numberOfLines={1}
+          ellipsizeMode="tail"
+          style={[styles.bottomTabLabel, active && styles.bottomTabLabelActive]}
+        >
+          {label}
+        </Text>
+      </View>
     </>
   );
 
@@ -384,22 +392,36 @@ function BottomTabs({
   onAccountPress: () => void;
   safeBottomInset: number;
 }) {
+  const footerInset = Math.max(safeBottomInset, 6);
+
   return (
-    <View style={[styles.bottomTabsWrap, { paddingBottom: safeBottomInset }]}>
+    <View style={[styles.bottomTabsWrap, { paddingBottom: footerInset }]}>
       <View style={styles.bottomTabs}>
         <BottomTabItem label="Home" icon="home-outline" active />
         <BottomTabItem label="Join New" icon="add-outline" onPress={onJoinNewPress} />
         <Pressable style={styles.bottomTabItem} onPress={onMySchemesPress}>
           <Ionicons name="pie-chart-outline" size={18} style={styles.bottomTabIcon} />
-          <Text style={styles.bottomTabLabel}>My Schemes</Text>
+          <View style={styles.bottomTabLabelWrap}>
+            <Text numberOfLines={1} ellipsizeMode="tail" style={styles.bottomTabLabel}>
+              My Schemes
+            </Text>
+          </View>
         </Pressable>
         <Pressable style={styles.bottomTabItem} onPress={onActivityPress}>
           <Ionicons name="time-outline" size={18} style={styles.bottomTabIcon} />
-          <Text style={styles.bottomTabLabel}>Activity</Text>
+          <View style={styles.bottomTabLabelWrap}>
+            <Text numberOfLines={1} ellipsizeMode="tail" style={styles.bottomTabLabel}>
+              Activity
+            </Text>
+          </View>
         </Pressable>
         <Pressable style={styles.bottomTabItem} onPress={onAccountPress}>
           <Ionicons name="person-outline" size={18} style={styles.bottomTabIcon} />
-          <Text style={styles.bottomTabLabel}>Account</Text>
+          <View style={styles.bottomTabLabelWrap}>
+            <Text numberOfLines={1} ellipsizeMode="tail" style={styles.bottomTabLabel}>
+              Account
+            </Text>
+          </View>
         </Pressable>
       </View>
     </View>
@@ -531,7 +553,7 @@ export function DashboardScreen({ navigation }: Props) {
               )}
 
               <SectionHeader
-                title="LIVE MARKET & WEALTH"
+                title=""
                 action={asOnDate ? `As on ${asOnDate}` : undefined}
               />
               <LiveMarketGoldCard
@@ -1272,9 +1294,17 @@ const styles = StyleSheet.create({
   },
   bottomTabItem: {
     flex: 1,
+    minHeight: 56,
+    paddingVertical: 6,
     alignItems: 'center',
     justifyContent: 'center',
     gap: 2,
+  },
+  bottomTabLabelWrap: {
+    minHeight: 16,
+    justifyContent: 'center',
+    alignItems: 'center',
+    width: '100%',
   },
   bottomTabIcon: {
     fontSize: 18,
@@ -1286,8 +1316,11 @@ const styles = StyleSheet.create({
   },
   bottomTabLabel: {
     fontSize: 10,
+    lineHeight: 13,
     color: '#9AA3B2',
     fontFamily: 'Poppins-Medium',
+    textAlign: 'center',
+    width: '100%',
   },
   bottomTabLabelActive: {
     color: '#E88800',

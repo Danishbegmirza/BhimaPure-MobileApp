@@ -135,14 +135,26 @@ export function CompleteProfileScreen({ navigation }: Props) {
       if (!token) { return; }
       const result = await fetchBranchList(token);
       if (result.success) {
-        setBranches(result.branchdata ?? []);
+        const branchList = result.branchdata ?? [];
+        setBranches(branchList);
+        // Auto-select "Online" branch as default if not already selected
+        if (!selectedBranchCode && branchList.length > 0) {
+          const onlineBranch = branchList.find(
+            b =>
+              b.branch_code.toLowerCase() === 'online' ||
+              b.display_name.toLowerCase().includes('online'),
+          );
+          if (onlineBranch) {
+            setSelectedBranchCode(onlineBranch.branch_code);
+          }
+        }
       }
     } catch (_e) {
       // silent – branch field stays editable as text
     } finally {
       setBranchLoading(false);
     }
-  }, [branches.length]);
+  }, [branches.length, selectedBranchCode]);
 
   useEffect(() => {
     if (step === 1) { loadBranches(); }

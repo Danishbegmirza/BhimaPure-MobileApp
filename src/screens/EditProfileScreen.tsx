@@ -207,6 +207,16 @@ export function EditProfileScreen({ navigation }: Props) {
         const byCode = branchList.find(b => b.branch_code === pref);
         const byName = branchList.find(b => b.display_name === pref);
         setSelectedBranchCode((byCode ?? byName)?.branch_code ?? '');
+      } else if (branchList.length > 0) {
+        // Auto-select "Online" branch as default if no preferred branch set
+        const onlineBranch = branchList.find(
+          b =>
+            b.branch_code.toLowerCase() === 'online' ||
+            b.display_name.toLowerCase().includes('online'),
+        );
+        if (onlineBranch) {
+          setSelectedBranchCode(onlineBranch.branch_code);
+        }
       }
     } catch (_e) {
       // silent fail – user can still edit manually

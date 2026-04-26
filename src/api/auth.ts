@@ -1,5 +1,5 @@
-const BASE_URL = 'http://bhimaadmin.smacononline.com/api/auth';
-//const BASE_URL = 'https://pureapp.bhimajewellery.com/api/auth';
+//const BASE_URL = 'http://bhimaadmin.smacononline.com/api/auth';
+const BASE_URL = 'https://pureapp.bhimajewellery.com/api/auth';
 
 export interface RequestOtpSuccess {
   message: string;

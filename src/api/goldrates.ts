@@ -1,4 +1,4 @@
-const BASE_URL = 'http://bhimaadmin.smacononline.com/api';
+const BASE_URL = 'https://pureapp.bhimajewellery.com/api';
 
 export interface GoldRateItem {
   item_type: string;
