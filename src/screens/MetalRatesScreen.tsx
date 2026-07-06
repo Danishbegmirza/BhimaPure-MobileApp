@@ -16,6 +16,7 @@ import { useSafeBottomInset } from '../utils/safeBottomInset';
 import type { RootStackParamList } from '../navigation/types';
 import { fetchGoldRates, type GoldRateItem } from '../api/goldrates';
 import { goBackOrDashboard } from '../navigation/backNavigation';
+import { BottomTabs } from '../components/BottomTabs';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'MetalRates'>;
 
@@ -109,6 +110,7 @@ export function MetalRatesScreen({ navigation }: Props) {
   return (
     <SafeAreaView style={styles.safe}>
       <StatusBar barStyle="light-content" backgroundColor="#E88800" />
+      <View style={styles.screenBody}>
       <View style={[styles.hero, { paddingTop: Math.max(top, 12) }]}>
         <View style={styles.heroTop}>
           <Pressable style={styles.heroIcon} onPress={() => goBackOrDashboard(navigation)} hitSlop={8}>
@@ -132,7 +134,7 @@ export function MetalRatesScreen({ navigation }: Props) {
         </View>
       ) : (
         <ScrollView
-          contentContainerStyle={[styles.scroll, { paddingBottom: 24 + safeBottom }]}
+          contentContainerStyle={[styles.scroll, { paddingBottom: 100 + safeBottom }]}
           showsVerticalScrollIndicator={false}
         >
           <View style={styles.infoBanner}>
@@ -207,6 +209,8 @@ export function MetalRatesScreen({ navigation }: Props) {
           </Pressable>
         </ScrollView>
       )}
+      <BottomTabs navigation={navigation} />
+      </View>
     </SafeAreaView>
   );
 }
@@ -215,6 +219,9 @@ const styles = StyleSheet.create({
   safe: {
     flex: 1,
     backgroundColor: '#F5F5F3',
+  },
+  screenBody: {
+    flex: 1,
   },
   hero: {
     backgroundColor: '#E88800',

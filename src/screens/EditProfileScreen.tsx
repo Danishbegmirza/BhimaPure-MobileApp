@@ -33,6 +33,7 @@ import {
   isValidPanFormat,
   isValidPincode6,
 } from '../utils/profileFieldValidation';
+import { BottomTabs } from '../components/BottomTabs';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'EditProfile'>;
 
@@ -154,6 +155,10 @@ export function EditProfileScreen({ navigation }: Props) {
   const [formErrors, setFormErrors] = useState<Record<string, string>>({});
   const [formErrorBanner, setFormErrorBanner] = useState('');
 
+  // Language preference
+  const [languagePreference, setLanguagePreference] = useState<'en' | 'ta'>('en');
+  const [languageDropdownOpen, setLanguageDropdownOpen] = useState(false);
+
   const loadData = useCallback(async () => {
     try {
       setInitialising(true);
@@ -165,6 +170,8 @@ export function EditProfileScreen({ navigation }: Props) {
         fetchProfile(token),
         fetchBranchList(token),
       ]);
+
+      console.log('profileRes', profileRes);
 
       let preferredBranchRaw: string | null = null;
       if (profileRes.success) {
@@ -197,16 +204,48 @@ export function EditProfileScreen({ navigation }: Props) {
         // KYC
         setPan(d.kyc_details?.pan_number ?? '');
         setAadhaar(d.kyc_details?.aadhaar_number ?? '');
+        // Language preference - handle both string ("ta"/"en") and object formats
+        let appLang = 'en';
+        if (typeof d.language_preference === 'string') {
+          appLang = d.language_preference;
+        } else if (d.language_preference && typeof d.language_preference === 'object') {
+          appLang = (d.language_preference as { app_language?: string }).app_language ?? 'en';
+        }
+        setLanguagePreference(appLang === 'Tamil' || appLang === 'ta' ? 'ta' : 'en');
+        console.log('Language from API:', d.language_preference, '-> Setting:', appLang);
       }
 
       const branchList = branchRes.success ? (branchRes.branchdata ?? []) : [];
       setBranches(branchList);
 
       const pref = preferredBranchRaw?.trim() ?? '';
+      console.log('Branch from profile:', pref, 'Branch list:', branchList.length);
       if (pref && branchList.length > 0) {
-        const byCode = branchList.find(b => b.branch_code === pref);
-        const byName = branchList.find(b => b.display_name === pref);
-        setSelectedBranchCode((byCode ?? byName)?.branch_code ?? '');
+        // Try exact match by code
+        let matchedBranch = branchList.find(b => b.branch_code === pref);
+        // Try exact match by display name
+        if (!matchedBranch) {
+          matchedBranch = branchList.find(b => b.display_name === pref);
+        }
+        // Try case-insensitive match by code
+        if (!matchedBranch) {
+          matchedBranch = branchList.find(b => b.branch_code.toLowerCase() === pref.toLowerCase());
+        }
+        // Try case-insensitive match by display name
+        if (!matchedBranch) {
+          matchedBranch = branchList.find(b => b.display_name.toLowerCase() === pref.toLowerCase());
+        }
+        // Try partial match (display name contains pref or vice versa)
+        if (!matchedBranch) {
+          matchedBranch = branchList.find(
+            b => b.display_name.toLowerCase().includes(pref.toLowerCase()) ||
+                 pref.toLowerCase().includes(b.display_name.toLowerCase())
+          );
+        }
+        if (matchedBranch) {
+          console.log('Matched branch:', matchedBranch);
+          setSelectedBranchCode(matchedBranch.branch_code);
+        }
       } else if (branchList.length > 0) {
         // Auto-select "Online" branch as default if no preferred branch set
         const onlineBranch = branchList.find(
@@ -245,6 +284,11 @@ export function EditProfileScreen({ navigation }: Props) {
 
   const onAadhaarChange = useCallback((v: string) => {
     setAadhaar(v.replace(/\D/g, '').slice(0, 12));
+  }, []);
+
+  const handleLanguageSelect = useCallback((langCode: 'en' | 'ta') => {
+    setLanguagePreference(langCode);
+    setLanguageDropdownOpen(false);
   }, []);
 
   const validateBeforeSave = useCallback((): boolean => {
@@ -320,7 +364,30 @@ export function EditProfileScreen({ navigation }: Props) {
         accountNo: accountNumber,
         ifsc,
         customerCode,
+        language_preference: languagePreference, // "en" or "ta"
       });
+      console.log('languagePreference', {
+        name: fullName,
+        mobileNo: mobile,
+        emailId: email,
+        birthDate: formatDateForApi(dob),
+        weddingAnniversary: anniversary ? formatDateForApi(anniversary) : undefined,
+        address1: address,
+        address2: address2 || undefined,
+        area: area || undefined,
+        city,
+        pinCode: pincode,
+        state,
+        branchCode: selectedBranchCode,
+        panNo: pan,
+        adharNo: aadhaar,
+        bankName,
+        accountNo: accountNumber,
+        ifsc,
+        customerCode,
+        language_preference: languagePreference, // "en" or "ta"
+      });
+      console.log('result', result);
       if (result.success) {
         Alert.alert('Success', result.message ?? 'Profile updated successfully.', [
           { text: 'OK', onPress: () => goBackOrDashboard(navigation) },
@@ -341,15 +408,18 @@ export function EditProfileScreen({ navigation }: Props) {
     validateBeforeSave,
     fullName, mobile, email, dob, anniversary, address, address2, area,
     city, pincode, state, selectedBranchCode, pan, aadhaar, bankName,
-    accountNumber, ifsc, customerCode, navigation,
+    accountNumber, ifsc, customerCode, languagePreference, navigation,
   ]);
 
   if (initialising) {
     return (
       <SafeAreaView style={styles.safeArea}>
         <StatusBar barStyle="dark-content" backgroundColor="#F5F5F3" />
+        <View style={styles.screenBody}>
         <View style={styles.loadingWrap}>
           <ActivityIndicator size="large" color="#F59E0B" />
+        </View>
+        <BottomTabs navigation={navigation} activeTab="account" />
         </View>
       </SafeAreaView>
     );
@@ -358,8 +428,9 @@ export function EditProfileScreen({ navigation }: Props) {
   return (
     <SafeAreaView style={styles.safeArea}>
       <StatusBar barStyle="dark-content" backgroundColor="#F5F5F3" />
+      <View style={styles.screenBody}>
       <ScrollView
-        contentContainerStyle={[styles.content, { paddingBottom: 98 + safeBottom }]}
+        contentContainerStyle={[styles.content, { paddingBottom: 170 + safeBottom }]}
         showsVerticalScrollIndicator={false}
       >
         {formErrorBanner ? (
@@ -461,11 +532,12 @@ export function EditProfileScreen({ navigation }: Props) {
         <Text style={styles.sectionTitle}>PREFERRED BRANCH</Text>
         <Label text="BRANCH" />
         {branches.length > 0 ? (
-          <>
+          <View style={styles.dropdownContainer}>
             <Pressable
               style={[styles.dropdownRow, formErrors.branch && styles.inputRowError]}
               onPress={() => {
                 setStateDropdownOpen(false);
+                setLanguageDropdownOpen(false);
                 setBranchDropdownOpen(prev => !prev);
               }}
             >
@@ -480,7 +552,11 @@ export function EditProfileScreen({ navigation }: Props) {
               />
             </Pressable>
             {branchDropdownOpen && (
-              <View style={styles.dropdownList}>
+              <ScrollView 
+                style={styles.dropdownListScrollable} 
+                nestedScrollEnabled={true}
+                showsVerticalScrollIndicator={true}
+              >
                 {branches.map(b => (
                   <Pressable
                     key={b.branch_code}
@@ -507,9 +583,9 @@ export function EditProfileScreen({ navigation }: Props) {
                     )}
                   </Pressable>
                 ))}
-              </View>
+              </ScrollView>
             )}
-          </>
+          </View>
         ) : (
           <InputRow
             icon="business-outline"
@@ -541,9 +617,73 @@ export function EditProfileScreen({ navigation }: Props) {
         <InputRow icon="card-outline" value={accountNumber} setValue={setAccountNumber} placeholder="1234567890" keyboardType="number-pad" />
         <Label text="IFSC CODE" />
         <InputRow icon="document-text-outline" value={ifsc} setValue={setIfsc} placeholder="HDFC0001234" />
+
+        {/* Language Preference */}
+        <Text style={styles.sectionTitle}>LANGUAGE PREFERENCE</Text>
+        <Label text="APP LANGUAGE" />
+        <Pressable
+          style={styles.dropdownRow}
+          onPress={() => {
+            setBranchDropdownOpen(false);
+            setStateDropdownOpen(false);
+            setLanguageDropdownOpen(prev => !prev);
+          }}
+        >
+          <Ionicons name="language-outline" size={15} color="#9CA3AF" />
+          <Text style={styles.dropdownText}>
+            {languagePreference === 'en' ? 'English' : 'தமிழ் (Tamil)'}
+          </Text>
+          <Ionicons
+            name={languageDropdownOpen ? 'chevron-up' : 'chevron-down'}
+            size={15}
+            color="#9CA3AF"
+          />
+        </Pressable>
+        {languageDropdownOpen && (
+          <View style={styles.dropdownList}>
+            <Pressable
+              style={[
+                styles.dropdownItem,
+                languagePreference === 'en' && styles.dropdownItemActive,
+              ]}
+              onPress={() => handleLanguageSelect('en')}
+            >
+              <Text
+                style={[
+                  styles.dropdownItemText,
+                  languagePreference === 'en' && styles.dropdownItemTextActive,
+                ]}
+              >
+                English
+              </Text>
+              {languagePreference === 'en' && (
+                <Ionicons name="checkmark" size={14} color="#F39200" />
+              )}
+            </Pressable>
+            <Pressable
+              style={[
+                styles.dropdownItem,
+                languagePreference === 'ta' && styles.dropdownItemActive,
+              ]}
+              onPress={() => handleLanguageSelect('ta')}
+            >
+              <Text
+                style={[
+                  styles.dropdownItemText,
+                  languagePreference === 'ta' && styles.dropdownItemTextActive,
+                ]}
+              >
+                தமிழ் (Tamil)
+              </Text>
+              {languagePreference === 'ta' && (
+                <Ionicons name="checkmark" size={14} color="#F39200" />
+              )}
+            </Pressable>
+          </View>
+        )}
       </ScrollView>
 
-      <View style={[styles.bottomCtaWrap, { paddingBottom: 14 + safeBottom }]}>
+      <View style={[styles.bottomCtaWrap, { bottom: 70 + safeBottom }]}>
         <Pressable style={styles.bottomCta} onPress={handleSave} disabled={saving}>
           <LinearGradient
             colors={['#FFA800', '#F38B00']}
@@ -562,12 +702,15 @@ export function EditProfileScreen({ navigation }: Props) {
           </LinearGradient>
         </Pressable>
       </View>
+      <BottomTabs navigation={navigation} activeTab="account" />
+      </View>
     </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
   safeArea: { flex: 1, backgroundColor: '#F5F5F3' },
+  screenBody: { flex: 1 },
   loadingWrap: { flex: 1, justifyContent: 'center', alignItems: 'center' },
   content: { paddingHorizontal: 14, paddingTop: 8, marginTop: 30 },
   formErrorBanner: {
@@ -648,6 +791,11 @@ const styles = StyleSheet.create({
   },
   dropdownText: { flex: 1, color: '#131A28', fontSize: 13, fontFamily: 'Poppins-Medium' },
   dropdownPlaceholder: { color: '#9CA3AF' },
+  dropdownContainer: {
+    position: 'relative',
+    zIndex: 10,
+    marginBottom: 9,
+  },
   dropdownList: {
     borderRadius: 14,
     borderWidth: 1,
@@ -655,6 +803,14 @@ const styles = StyleSheet.create({
     backgroundColor: '#FFFFFF',
     overflow: 'hidden',
     marginBottom: 9,
+  },
+  dropdownListScrollable: {
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: '#E8EBEF',
+    backgroundColor: '#FFFFFF',
+    maxHeight: 250,
+    marginTop: 4,
   },
   dropdownItem: {
     flexDirection: 'row',

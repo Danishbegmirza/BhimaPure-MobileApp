@@ -18,6 +18,8 @@ import {
   type SchemePopupResponse,
 } from '../api/user';
 import { getToken } from '../storage/auth';
+import { BottomTabs } from '../components/BottomTabs';
+import { useSafeBottomInset } from '../utils/safeBottomInset';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'MySchemeDetails'>;
 
@@ -31,6 +33,7 @@ function formatDate(dateStr: string): string {
 }
 
 export function MySchemeDetailsScreen({ navigation, route }: Props) {
+  const safeBottom = useSafeBottomInset();
   const schemeItemId = Number(route.params.schemeId);
 
   const [loading, setLoading] = useState(true);
@@ -47,6 +50,7 @@ export function MySchemeDetailsScreen({ navigation, route }: Props) {
         return;
       }
       const result = await fetchSchemePopupDetails(token, schemeItemId);
+      console.log("myportfolio details", result)
       if (result.success) {
         setData(result);
       } else {
@@ -68,6 +72,7 @@ export function MySchemeDetailsScreen({ navigation, route }: Props) {
     return (
       <SafeAreaView style={styles.safeArea}>
         <StatusBar barStyle="light-content" backgroundColor="#050505" />
+        <View style={styles.screenBody}>
         <View style={styles.hero}>
           <View style={styles.topRow}>
             <Pressable style={styles.iconButton} onPress={() => goBackOrDashboard(navigation)}>
@@ -85,6 +90,8 @@ export function MySchemeDetailsScreen({ navigation, route }: Props) {
         <View style={styles.sheetCenter}>
           <ActivityIndicator size="large" color="#E88800" />
         </View>
+        <BottomTabs navigation={navigation} activeTab="mySchemes" />
+        </View>
       </SafeAreaView>
     );
   }
@@ -94,6 +101,7 @@ export function MySchemeDetailsScreen({ navigation, route }: Props) {
     return (
       <SafeAreaView style={styles.safeArea}>
         <StatusBar barStyle="light-content" backgroundColor="#050505" />
+        <View style={styles.screenBody}>
         <View style={styles.hero}>
           <View style={styles.topRow}>
             <Pressable style={styles.iconButton} onPress={() => goBackOrDashboard(navigation)}>
@@ -118,17 +126,26 @@ export function MySchemeDetailsScreen({ navigation, route }: Props) {
             <Text style={styles.retryText}>LOGIN</Text>
           </Pressable>
         </View>
+        <BottomTabs navigation={navigation} activeTab="mySchemes" />
+        </View>
       </SafeAreaView>
     );
   }
-
+console.log('data', data);
   const { scheme, next_payment, metrics } = data;
+  
+  // Get nominee and date info from scheme object (API now returns these inside scheme)
+  const nomineeName = scheme.nominee_name || data.nominee_name || null;
+  const nomineeRelation = scheme.nominee_relation || data.nominee_relation || null;
+  const joinDate = scheme.join_date || data.join_date || null;
+  const maturityDate = scheme.maturity_date || data.maturity_date || null;
+  
   const isOverdue = next_payment?.status === 'OVERDUE';
 
   return (
     <SafeAreaView style={styles.safeArea}>
       <StatusBar barStyle="light-content" backgroundColor="#050505" />
-
+      <View style={styles.screenBody}>
       {/* Hero */}
       <View style={styles.hero}>
         <View style={styles.topRow}>
@@ -163,7 +180,7 @@ export function MySchemeDetailsScreen({ navigation, route }: Props) {
       {/* Sheet */}
       <ScrollView
         style={styles.sheetScroll}
-        contentContainerStyle={styles.sheetContent}
+        contentContainerStyle={[styles.sheetContent, { paddingBottom: 100 + safeBottom }]}
         showsVerticalScrollIndicator={false}
       >
         <View style={styles.sheetHandle} />
@@ -177,6 +194,99 @@ export function MySchemeDetailsScreen({ navigation, route }: Props) {
           <Pressable style={styles.closeButton} onPress={() => goBackOrDashboard(navigation)}>
             <Ionicons name="close" size={14} color="#9CA3AF" />
           </Pressable>
+        </View>
+
+        {/* Date cards - Joining and Maturity */}
+        <View style={styles.dateCardsRow}>
+          <View style={styles.dateCard}>
+            <View style={styles.dateCardIconWrap}>
+              <Ionicons name="calendar-outline" size={14} color="#F39200" />
+            </View>
+            <Text style={styles.dateCardLabel}>JOINING DATE</Text>
+            <Text style={styles.dateCardValue}>
+              {joinDate ? formatDate(joinDate) : '—'}
+            </Text>
+          </View>
+          <View style={styles.dateCard}>
+            <View style={styles.dateCardIconWrap}>
+              <Ionicons name="calendar-outline" size={14} color="#F39200" />
+            </View>
+            <Text style={styles.dateCardLabel}>MATURITY DATE</Text>
+            <Text style={styles.dateCardValue}>
+              {maturityDate ? formatDate(maturityDate) : '—'}
+            </Text>
+          </View>
+        </View>
+
+        {/* Nominee Details */}
+        {(nomineeName || nomineeRelation) && (
+          <View style={styles.nomineeCard}>
+            <View style={styles.nomineeHeader}>
+              <Ionicons name="heart-outline" size={16} color="#FBBF24" />
+              <Text style={styles.nomineeHeaderText}>NOMINEE DETAILS</Text>
+            </View>
+            <View style={styles.nomineeBody}>
+              <View style={styles.nomineeField}>
+                <Text style={styles.nomineeLabel}>NAME</Text>
+                <Text style={styles.nomineeName}>
+                  {nomineeName || '—'}
+                </Text>
+              </View>
+              <View style={styles.nomineeFieldRight}>
+                <Text style={styles.nomineeLabel}>RELATIONSHIP</Text>
+                <View style={styles.nomineeRelationWrap}>
+                  <Ionicons name="people-outline" size={12} color="#FBBF24" />
+                  <Text style={styles.nomineeRelation}>
+                    {nomineeRelation || '—'}
+                  </Text>
+                </View>
+              </View>
+            </View>
+          </View>
+        )}
+
+        {/* Scheme Details Card */}
+        <View style={styles.schemeDetailsCard}>
+          <View style={styles.schemeDetailsHeader}>
+            <Ionicons name="information-circle-outline" size={16} color="#3B82F6" />
+            <Text style={styles.schemeDetailsHeaderText}>SCHEME DETAILS</Text>
+          </View>
+          <View style={styles.schemeDetailsBody}>
+            {scheme.scheme_amount != null && scheme.scheme_amount > 0 && (
+              <View style={styles.schemeDetailRow}>
+                <Text style={styles.schemeDetailLabel}>Installment Amount</Text>
+                <Text style={styles.schemeDetailValue}>₹{scheme.scheme_amount.toLocaleString('en-IN')}</Text>
+              </View>
+            )}
+            {scheme.min_amount && (
+              <View style={styles.schemeDetailRow}>
+                <Text style={styles.schemeDetailLabel}>Minimum Amount</Text>
+                <Text style={styles.schemeDetailValue}>₹{parseFloat(scheme.min_amount).toLocaleString('en-IN')}</Text>
+              </View>
+            )}
+            {scheme.max_amount && (
+              <View style={styles.schemeDetailRow}>
+                <Text style={styles.schemeDetailLabel}>Maximum Amount</Text>
+                <Text style={styles.schemeDetailValue}>₹{parseFloat(scheme.max_amount).toLocaleString('en-IN')}</Text>
+              </View>
+            )}
+            {scheme.multiple_of && parseFloat(scheme.multiple_of) > 1 && (
+              <View style={styles.schemeDetailRow}>
+                <Text style={styles.schemeDetailLabel}>Multiple Of</Text>
+                <Text style={styles.schemeDetailValue}>₹{parseFloat(scheme.multiple_of).toLocaleString('en-IN')}</Text>
+              </View>
+            )}
+            <View style={styles.schemeDetailRow}>
+              <Text style={styles.schemeDetailLabel}>Total Installments</Text>
+              <Text style={styles.schemeDetailValue}>{scheme.total_installments}</Text>
+            </View>
+            <View style={styles.schemeDetailRow}>
+              <Text style={styles.schemeDetailLabel}>Variable Installment</Text>
+              <Text style={[styles.schemeDetailValue, { color: scheme.variable_installment_allow ? '#10B981' : '#6B7280' }]}>
+                {scheme.variable_installment_allow ? 'Allowed' : 'Not Allowed'}
+              </Text>
+            </View>
+          </View>
         </View>
 
         {/* Installment timeline */}
@@ -266,11 +376,14 @@ export function MySchemeDetailsScreen({ navigation, route }: Props) {
                 {isOverdue ? 'Payment Overdue' : 'Next Payment'}
               </Text>
               <Text style={styles.milestoneBody}>{next_payment.label}</Text>
-              {next_payment.due_date ? (
+              {next_payment.text && (
+                <Text style={styles.milestoneSubText}>{next_payment.text}</Text>
+              )}
+              {(next_payment.due_date || next_payment.date) && (
                 <Text style={styles.milestoneDueDate}>
-                  Due: {formatDate(next_payment.due_date)}
+                  Due: {formatDate(next_payment.due_date || next_payment.date || '')}
                 </Text>
-              ) : null}
+              )}
             </View>
           </View>
         )}
@@ -279,12 +392,15 @@ export function MySchemeDetailsScreen({ navigation, route }: Props) {
           <Text style={styles.closeCtaText}>CLOSE</Text>
         </Pressable>
       </ScrollView>
+      <BottomTabs navigation={navigation} activeTab="mySchemes" />
+      </View>
     </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
   safeArea: { flex: 1, backgroundColor: '#050505' },
+  screenBody: { flex: 1 },
   sheetCenter: {
     flex: 1,
     alignItems: 'center',
@@ -396,6 +512,126 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
+  dateCardsRow: {
+    flexDirection: 'row',
+    gap: 10,
+  },
+  dateCard: {
+    flex: 1,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 16,
+    padding: 14,
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+  },
+  dateCardIconWrap: {
+    width: 28,
+    height: 28,
+    borderRadius: 8,
+    backgroundColor: '#FFF7E6',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 10,
+  },
+  dateCardLabel: {
+    color: '#94A3B8',
+    fontSize: 9,
+    fontFamily: 'Poppins-Bold',
+    letterSpacing: 1.1,
+  },
+  dateCardValue: {
+    color: '#0F172A',
+    fontSize: 14,
+    fontFamily: 'Poppins-Bold',
+    marginTop: 4,
+  },
+  nomineeCard: {
+    backgroundColor: '#111827',
+    borderRadius: 16,
+    padding: 16,
+  },
+  nomineeHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginBottom: 14,
+  },
+  nomineeHeaderText: {
+    color: '#FBBF24',
+    fontSize: 10,
+    fontFamily: 'Poppins-Bold',
+    letterSpacing: 1.2,
+  },
+  nomineeBody: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+  },
+  nomineeField: {
+    flex: 1,
+  },
+  nomineeFieldRight: {
+    alignItems: 'flex-end',
+  },
+  nomineeLabel: {
+    color: '#6B7280',
+    fontSize: 9,
+    fontFamily: 'Poppins-Medium',
+    letterSpacing: 0.5,
+  },
+  nomineeName: {
+    color: '#FFFFFF',
+    fontSize: 16,
+    fontFamily: 'Poppins-Bold',
+    marginTop: 4,
+  },
+  nomineeRelationWrap: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginTop: 4,
+  },
+  nomineeRelation: {
+    color: '#FBBF24',
+    fontSize: 14,
+    fontFamily: 'Poppins-Bold',
+  },
+  schemeDetailsCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 16,
+    padding: 16,
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+  },
+  schemeDetailsHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginBottom: 14,
+  },
+  schemeDetailsHeaderText: {
+    color: '#3B82F6',
+    fontSize: 10,
+    fontFamily: 'Poppins-Bold',
+    letterSpacing: 1.2,
+  },
+  schemeDetailsBody: {
+    gap: 12,
+  },
+  schemeDetailRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  schemeDetailLabel: {
+    color: '#6B7280',
+    fontSize: 12,
+    fontFamily: 'Poppins-Medium',
+  },
+  schemeDetailValue: {
+    color: '#1F2937',
+    fontSize: 13,
+    fontFamily: 'Poppins-SemiBold',
+  },
   timelineWrap: { gap: 10 },
   timelineHead: {
     flexDirection: 'row',
@@ -472,6 +708,7 @@ const styles = StyleSheet.create({
   milestoneTextWrap: { flex: 1, gap: 3 },
   milestoneTitle: { color: '#0F172A', fontSize: 11, fontFamily: 'Poppins-Bold' },
   milestoneBody: { color: '#A16207', fontSize: 11, fontFamily: 'Poppins-Medium', lineHeight: 16 },
+  milestoneSubText: { color: '#EF4444', fontSize: 10, fontFamily: 'Poppins-Medium', marginTop: 2 },
   milestoneDueDate: { marginTop: 2, color: '#6B7280', fontSize: 9, fontFamily: 'Poppins-SemiBold' },
   closeCta: {
     minHeight: 46,

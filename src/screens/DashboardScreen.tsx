@@ -4,12 +4,14 @@ import {
   ImageBackground,
   Linking,
   Pressable,
+  RefreshControl,
   SafeAreaView,
   ScrollView,
   StatusBar,
   StyleSheet,
   Text,
   View,
+  Image,
 } from 'react-native';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import Ionicons from 'react-native-vector-icons/Ionicons';
@@ -27,6 +29,10 @@ import {
   saleRateForGoldPurity,
   type GoldRateItem,
 } from '../api/goldrates';
+import { fetchProfile } from '../api/user';
+import { BottomTabs } from '../components/BottomTabs';
+import { useLanguage } from '../context/LanguageContext';
+import type { SupportedLanguage } from '../staticTexts';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'Dashboard'>;
 
@@ -69,13 +75,6 @@ type TransactionItemProps = {
   amount: string;
 };
 
-type BottomTabItemProps = {
-  label: string;
-  icon: string;
-  active?: boolean;
-  onPress?: () => void;
-};
-
 // ─── Sub-components ───────────────────────────────────────────────────────────
 
 function SectionHeader({ title, action, actionAccent, onActionPress }: SectionHeaderProps) {
@@ -99,26 +98,32 @@ function WelcomeCard({
   customerName,
   isLoggedIn,
   onNotificationsPress,
+  welcomeBackText,
+  welcomeText,
+  guestText,
 }: {
   customerName: string;
   isLoggedIn: boolean;
   onNotificationsPress: () => void;
+  welcomeBackText: string;
+  welcomeText: string;
+  guestText: string;
 }) {
   return (
     <View style={styles.welcomeCard}>
       <View style={styles.profileBadge}>
-        <Ionicons name="person-outline" size={14} color="#E68900" />
+        <Image source={require('../assets/welcome.png')} style={{width: 44, height: 44, }} />
       </View>
       <View style={styles.welcomeTextWrap}>
-        <Text style={styles.welcomeLabel}>{isLoggedIn ? 'WELCOME BACK' : 'WELCOME'}</Text>
-        <Text style={styles.welcomeName}>{customerName || 'Guest'}</Text>
+        <Text style={styles.welcomeLabel}>{isLoggedIn ? welcomeBackText : welcomeText}</Text>
+        <Text style={styles.welcomeName}>{customerName || guestText}</Text>
       </View>
       <View style={styles.topActions}>
-        <Pressable style={styles.roundIcon} onPress={onNotificationsPress}>
-          <Ionicons name="notifications-outline" size={19} color="#707A89" />
+          <Pressable style={styles.roundIcon} onPress={onNotificationsPress}>
+            <Image source={require('../assets/bell.png')} style={{width: 20, height: 20, }} />
         </Pressable>
         <Pressable style={styles.roundIcon} onPress={() => Linking.openURL('https://wa.me/918547771777')}>
-          <Ionicons name="chatbubble-ellipses-outline" size={19} color="#22C55E" />
+          <Image source={require('../assets/chat.png')} style={{width: 33, height: 33, }} />
         </Pressable>
       </View>
     </View>
@@ -128,9 +133,17 @@ function WelcomeCard({
 function LiveMarketGoldCard({
   goldRate22k,
   onPress,
+  todaysGoldRateText,
+  liveText,
+  perGram22kText,
+  viewAllMetalRatesText,
 }: {
   goldRate22k: string;
   onPress: () => void;
+  todaysGoldRateText: string;
+  liveText: string;
+  perGram22kText: string;
+  viewAllMetalRatesText: string;
 }) {
   const price = `₹${formatINR(goldRate22k || '0')}`;
   return (
@@ -140,17 +153,17 @@ function LiveMarketGoldCard({
           <View style={styles.liveMarketIconCircle}>
             <Ionicons name="trophy" size={16} color="#FFFFFF" />
           </View>
-          <Text style={styles.liveMarketRateLabel}>TODAY'S GOLD RATE</Text>
+          <Text style={styles.liveMarketRateLabel}>{todaysGoldRateText}</Text>
         </View>
         <View style={styles.liveMarketLiveBadge}>
           <View style={styles.liveMarketDot} />
-          <Text style={styles.liveMarketLiveText}>LIVE</Text>
+          <Text style={styles.liveMarketLiveText}>{liveText}</Text>
         </View>
       </View>
       <Text style={styles.liveMarketPrice}>{price}</Text>
-      <Text style={styles.liveMarketPerGram}>Per Gram (22K Gold)</Text>
+      <Text style={styles.liveMarketPerGram}>{perGram22kText}</Text>
       <View style={styles.liveMarketDivider} />
-      <Text style={styles.liveMarketFooterCta}>View All Metal Rates &gt;</Text>
+      <Text style={styles.liveMarketFooterCta}>{viewAllMetalRatesText}</Text>
     </Pressable>
   );
 }
@@ -159,10 +172,16 @@ function InvestmentSummaryCards({
   goldHoldingsText,
   totalInvestmentText,
   growthPercent,
+  goldHoldingsLabel,
+  gold22kLabel,
+  totalInvestmentLabel,
 }: {
   goldHoldingsText: string;
   totalInvestmentText: string;
   growthPercent: string | null;
+  goldHoldingsLabel: string;
+  gold22kLabel: string;
+  totalInvestmentLabel: string;
 }) {
   return (
     <View style={styles.investmentRow}>
@@ -170,15 +189,15 @@ function InvestmentSummaryCards({
         <View style={[styles.investmentIconCircle, styles.investmentIconCircleGold]}>
           <Ionicons name="wallet-outline" size={18} color="#E67E22" />
         </View>
-        <Text style={styles.investmentCardLabel}>GOLD HOLDINGS</Text>
+        <Text style={styles.investmentCardLabel}>{goldHoldingsLabel}</Text>
         <Text style={styles.investmentCardValue}>{goldHoldingsText}</Text>
-        <Text style={styles.investmentCardSubGold}>22K Gold</Text>
+        <Text style={styles.investmentCardSubGold}>{gold22kLabel}</Text>
       </View>
       <View style={styles.investmentCard}>
         <View style={[styles.investmentIconCircle, styles.investmentIconCircleInr]}>
           <Text style={styles.investmentRupeeIcon}>₹</Text>
         </View>
-        <Text style={styles.investmentCardLabel}>TOTAL INVESTMENT</Text>
+        <Text style={styles.investmentCardLabel}>{totalInvestmentLabel}</Text>
         <Text style={styles.investmentCardValue}>{totalInvestmentText}</Text>
         {growthPercent ? (
           <View style={styles.investmentGrowthPill}>
@@ -193,13 +212,13 @@ function InvestmentSummaryCards({
   );
 }
 
-function JoinSchemeButton({ onPress }: { onPress: () => void }) {
+function JoinSchemeButton({ onPress, joinNewSchemeText }: { onPress: () => void; joinNewSchemeText: string }) {
   return (
     <Pressable style={styles.joinButton} onPress={onPress}>
       <View style={styles.plusBubble}>
-        <Text style={styles.plusText}>+</Text>
+        <Image source={require('../assets/join.png')} style={{width: 32, height: 32, marginRight:0}} />
       </View>
-      <Text style={styles.joinButtonText}>JOIN NEW GOLD SCHEME</Text>
+      <Text style={styles.joinButtonText} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.8}>{joinNewSchemeText}</Text>
     </Pressable>
   );
 }
@@ -245,6 +264,9 @@ function RecommendedCard({
   index,
   bannerImageUrl,
   onExplore,
+  mostPopularText,
+  fixedMonthlyText,
+  exploreDetailsText,
 }: {
   name: string;
   duration: string | null;
@@ -252,6 +274,9 @@ function RecommendedCard({
   index: number;
   bannerImageUrl?: string | null;
   onExplore: () => void;
+  mostPopularText: string;
+  fixedMonthlyText: string;
+  exploreDetailsText: string;
 }) {
   const cardTone = SCHEME_CARD_TONES[index % SCHEME_CARD_TONES.length];
 
@@ -266,8 +291,8 @@ function RecommendedCard({
         <View style={styles.recommendedOverlay} />
         {index === 0 ? (
           <View style={styles.popularTag}>
-            <Ionicons name="star-outline" size={10} color="#FFFFFF" />
-            <Text style={styles.popularTagText}>MOST POPULAR</Text>
+            <Image source={require('../assets/popular.png')} style={{width: 12, height: 12, }} />
+            <Text style={styles.popularTagText}>{mostPopularText}</Text>
           </View>
         ) : null}
         <Text style={styles.recommendedTitle}>{name}</Text>
@@ -279,13 +304,13 @@ function RecommendedCard({
           ) : (
             <View />
           )}
-          <Text style={styles.fixedText}>FIXED MONTHLY</Text>
+          <Text style={styles.fixedText}>{fixedMonthlyText}</Text>
         </View>
         {(Array.isArray(highlights) ? highlights : []).map((h, i) => (
-          <Text key={i} style={styles.pointText}>- {h}</Text>
+          <Text key={i} style={styles.pointText}> <Image source={require('../assets/points.png')} style={{width: 5, height: 5, marginTop:-5 }} /> {" "} {h}</Text>
         ))}
         <Pressable style={styles.exploreButton} onPress={onExplore}>
-          <Text style={styles.exploreButtonText}>EXPLORE DETAILS</Text>
+          <Text style={styles.exploreButtonText}>{exploreDetailsText}</Text>
         </Pressable>
       </View>
     </View>
@@ -311,7 +336,7 @@ function MarketAnalyticsCard({ goldRate22k }: { goldRate22k: string }) {
   );
 }
 
-function TransactionItem({ title, date, amount }: TransactionItemProps) {
+function TransactionItem({ title, date, amount, successText }: TransactionItemProps & { successText: string }) {
   return (
     <View style={styles.transactionItem}>
       <View style={styles.currencyDot}>
@@ -325,105 +350,25 @@ function TransactionItem({ title, date, amount }: TransactionItemProps) {
         <Text style={styles.transactionAmount}>
           Rs {formatINR(amount)}
         </Text>
-        <Text style={styles.successText}>SUCCESS</Text>
+        <Text style={styles.successText}>{successText}</Text>
       </View>
     </View>
   );
 }
 
-function SupportCard() {
+function SupportCard({ needAssistanceText, whatsappSupportText }: { needAssistanceText: string; whatsappSupportText: string }) {
   return (
     <View style={styles.supportCard}>
       <View style={styles.supportLeft}>
         <View style={styles.supportIconCircle}>
-          <Ionicons name="logo-whatsapp" size={18} color="#24A764" />
+          <Image source={require('../assets/whatsapp.png')} style={{width: 40, height: 40, }} />
         </View>
         <Pressable onPress={() => Linking.openURL('https://wa.me/918547771777')}>
-          <Text style={styles.supportTopLabel}>NEED ASSISTANCE?</Text>
-          <Text style={styles.supportTitle}>WhatsApp Support</Text>
+          <Text style={styles.supportTopLabel}>{needAssistanceText}</Text>
+          <Text style={styles.supportTitle}>{whatsappSupportText}</Text>
         </Pressable>
       </View>
       <Text style={styles.supportArrow}> &gt; </Text>
-    </View>
-  );
-}
-
-function BottomTabItem({ label, icon, active, onPress }: BottomTabItemProps) {
-  const content = (
-    <>
-      <Ionicons
-        name={icon}
-        size={18}
-        style={[styles.bottomTabIcon, active && styles.bottomTabIconActive]}
-      />
-      <View style={styles.bottomTabLabelWrap}>
-        <Text
-          numberOfLines={1}
-          ellipsizeMode="tail"
-          style={[styles.bottomTabLabel, active && styles.bottomTabLabelActive]}
-        >
-          {label}
-        </Text>
-      </View>
-    </>
-  );
-
-  if (onPress) {
-    return (
-      <Pressable style={styles.bottomTabItem} onPress={onPress}>
-        {content}
-      </Pressable>
-    );
-  }
-
-  return <View style={styles.bottomTabItem}>{content}</View>;
-}
-
-function BottomTabs({
-  onJoinNewPress,
-  onMySchemesPress,
-  onActivityPress,
-  onAccountPress,
-  safeBottomInset,
-}: {
-  onJoinNewPress: () => void;
-  onMySchemesPress: () => void;
-  onActivityPress: () => void;
-  onAccountPress: () => void;
-  safeBottomInset: number;
-}) {
-  const footerInset = Math.max(safeBottomInset, 6);
-
-  return (
-    <View style={[styles.bottomTabsWrap, { paddingBottom: footerInset }]}>
-      <View style={styles.bottomTabs}>
-        <BottomTabItem label="Home" icon="home-outline" active />
-        <BottomTabItem label="Join New" icon="add-outline" onPress={onJoinNewPress} />
-        <Pressable style={styles.bottomTabItem} onPress={onMySchemesPress}>
-          <Ionicons name="pie-chart-outline" size={18} style={styles.bottomTabIcon} />
-          <View style={styles.bottomTabLabelWrap}>
-            <Text numberOfLines={1} ellipsizeMode="tail" style={styles.bottomTabLabel}>
-              My Schemes
-            </Text>
-          </View>
-        </Pressable>
-        <Pressable style={styles.bottomTabItem} onPress={onActivityPress}>
-          <Ionicons name="time-outline" size={18} style={styles.bottomTabIcon} />
-          <View style={styles.bottomTabLabelWrap}>
-            <Text numberOfLines={1} ellipsizeMode="tail" style={styles.bottomTabLabel}>
-              Activity
-            </Text>
-          </View>
-        </Pressable>
-        <Pressable style={styles.bottomTabItem} onPress={onAccountPress}>
-          <Ionicons name="person-outline" size={18} style={styles.bottomTabIcon} />
-          <View style={styles.bottomTabLabelWrap}>
-            <Text numberOfLines={1} ellipsizeMode="tail" style={styles.bottomTabLabel}>
-              Account
-            </Text>
-          </View>
-        </Pressable>
-      </View>
     </View>
   );
 }
@@ -433,18 +378,41 @@ function BottomTabs({
 export function DashboardScreen({ navigation }: Props) {
   const safeBottom = useSafeBottomInset();
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
   const [data, setData] = useState<DashboardResponse | null>(null);
   const [goldRatesRows, setGoldRatesRows] = useState<GoldRateItem[]>([]);
   const [isLoggedIn, setIsLoggedIn] = useState(false);
+  const { texts, setLanguage } = useLanguage();
 
   const loadDashboard = useCallback(async () => {
     try {
       setLoading(true);
       const token = await getToken();
       setIsLoggedIn(!!token);
+      console.log('token', token);
       const result = await fetchDashboard(token ?? undefined);
       console.log('result', result);
       setData(result);
+
+      // Fetch profile to get language preference
+      if (token) {
+        try {
+          const profileResponse = await fetchProfile(token);
+          if (profileResponse.success && profileResponse.data?.language_preference) {
+            let appLang = 'en';
+            const langPref = profileResponse.data.language_preference;
+            if (typeof langPref === 'string') {
+              appLang = langPref;
+            } else if (langPref && typeof langPref === 'object') {
+              appLang = (langPref as { app_language?: string }).app_language ?? 'en';
+            }
+            setLanguage(appLang === 'ta' || appLang === 'Tamil' ? 'ta' : 'en');
+          }
+        } catch {
+          // Silent fail – default to English
+        }
+      }
+
       try {
         const gr = await fetchGoldRates();
         setGoldRatesRows(Array.isArray(gr.goldrates) ? gr.goldrates : []);
@@ -456,28 +424,64 @@ export function DashboardScreen({ navigation }: Props) {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [setLanguage]);
 
   useEffect(() => {
     loadDashboard();
   }, [loadDashboard]);
+
+  // ── Pull to refresh handler ────────────────────────────────────────────────
+  const onRefresh = useCallback(async () => {
+    setRefreshing(true);
+    try {
+      const token = await getToken();
+      setIsLoggedIn(!!token);
+      const result = await fetchDashboard(token ?? undefined);
+      setData(result);
+
+      if (token) {
+        try {
+          const profileResponse = await fetchProfile(token);
+          if (profileResponse.success && profileResponse.data?.language_preference) {
+            let appLang = 'en';
+            const langPref = profileResponse.data.language_preference;
+            if (typeof langPref === 'string') {
+              appLang = langPref;
+            } else if (langPref && typeof langPref === 'object') {
+              appLang = (langPref as { app_language?: string }).app_language ?? 'en';
+            }
+            setLanguage(appLang === 'ta' || appLang === 'Tamil' ? 'ta' : 'en');
+          }
+        } catch {
+          // Silent fail
+        }
+      }
+
+      try {
+        const gr = await fetchGoldRates();
+        setGoldRatesRows(Array.isArray(gr.goldrates) ? gr.goldrates : []);
+      } catch {
+        setGoldRatesRows([]);
+      }
+    } catch {
+      // Silent fail
+    } finally {
+      setRefreshing(false);
+    }
+  }, [setLanguage]);
 
   // ── Derived values ──────────────────────────────────────────────────────────
   const goldRate22k =
     saleRateForGoldPurity(goldRatesRows, 22) ?? data?.todays_goldrate?.sale_rate ?? '0';
   const asOnDate =
     firstGoldLastUpdated(goldRatesRows) ?? data?.todays_goldrate?.as_on_date ?? '';
-  const rateNum = parseFloat(String(goldRate22k).replace(/,/g, ''));
   const totalInstalmentRaw = getDashboardTotalInstalment(data);
-  const totalNum =
-    totalInstalmentRaw != null && totalInstalmentRaw !== ''
-      ? parseFloat(String(totalInstalmentRaw).replace(/,/g, ''))
-      : NaN;
-  const goldHoldingsG =
-    isLoggedIn && Number.isFinite(rateNum) && rateNum > 0 && Number.isFinite(totalNum) && totalNum >= 0
-      ? totalNum / rateNum
-      : null;
-  const goldHoldingsText = goldHoldingsG != null ? `${goldHoldingsG.toFixed(2)}g` : '—';
+  
+  // Gold holdings from totalmetal API response
+  const totalMetalRaw = data?.totalmetal;
+  const totalMetalNum = totalMetalRaw != null ? parseFloat(String(totalMetalRaw)) : NaN;
+  const goldHoldingsText = isLoggedIn && Number.isFinite(totalMetalNum) ? `${totalMetalNum.toFixed(2)}g` : '—';
+  
   const totalInvestmentText =
     isLoggedIn && totalInstalmentRaw != null ? `₹${formatINR(totalInstalmentRaw)}` : '—';
   const investmentGrowthPercent: string | null = (() => {
@@ -509,31 +513,45 @@ export function DashboardScreen({ navigation }: Props) {
               },
             ]}
             showsVerticalScrollIndicator={false}
+            refreshControl={
+              <RefreshControl
+                refreshing={refreshing}
+                onRefresh={onRefresh}
+                colors={['#E88800']}
+                tintColor="#E88800"
+              />
+            }
           >
             {/* Welcome / Header */}
             <WelcomeCard
               customerName={data?.customer?.name ?? ''}
               isLoggedIn={isLoggedIn}
               onNotificationsPress={() => navigation.navigate('Notifications')}
+              welcomeBackText={texts.dashboard.welcomeBack}
+              welcomeText={texts.dashboard.welcome}
+              guestText={texts.dashboard.guest}
             />
 
             <View style={styles.mainSections}>
-              <SectionHeader title="INVESTMENT" />
+              <SectionHeader title={texts.dashboard.investmentLabel} />
               <InvestmentSummaryCards
                 goldHoldingsText={goldHoldingsText}
                 totalInvestmentText={totalInvestmentText}
                 growthPercent={investmentGrowthPercent}
+                goldHoldingsLabel={texts.dashboard.goldHoldings}
+                gold22kLabel={texts.dashboard.gold22k}
+                totalInvestmentLabel={texts.dashboard.totalInvestment}
               />
 
               {/* Join CTA */}
-              <JoinSchemeButton onPress={() => navigation.navigate('SelectScheme')} />
+              <JoinSchemeButton onPress={() => navigation.navigate('SelectScheme')} joinNewSchemeText={texts.dashboard.joinNewScheme} />
 
               {/* My Enrolled Schemes – only for logged-in users */}
               {isLoggedIn && data?.myschemes && data.myschemes.length > 0 && (
                 <>
                   <SectionHeader
-                    title="MY ENROLLED SCHEMES"
-                    action="VIEW ALL PORTFOLIO"
+                    title={texts.dashboard.myEnrolledSchemes}
+                    action={texts.dashboard.viewAllPortfolio}
                     actionAccent
                     onActionPress={() => navigation.navigate('MySchemes')}
                   />
@@ -559,14 +577,18 @@ export function DashboardScreen({ navigation }: Props) {
               <LiveMarketGoldCard
                 goldRate22k={goldRate22k}
                 onPress={() => navigation.navigate('MetalRates')}
+                todaysGoldRateText={texts.dashboard.todaysGoldRate}
+                liveText={texts.dashboard.live}
+                perGram22kText={texts.dashboard.perGram22k}
+                viewAllMetalRatesText={texts.dashboard.viewAllMetalRates}
               />
 
               {/* Recommended Schemes */}
               {data?.schemetype && data.schemetype.length > 0 && (
                 <>
                   <SectionHeader
-                    title="RECOMMENDED FOR YOU"
-                    action="VIEW ALL"
+                    title={texts.dashboard.recommendedForYou}
+                    action={texts.dashboard.viewAll}
                     actionAccent
                     onActionPress={() => navigation.navigate('SelectScheme')}
                   />
@@ -576,6 +598,7 @@ export function DashboardScreen({ navigation }: Props) {
                     contentContainerStyle={styles.recommendedScrollContent}
                   >
                     {data.schemetype.map((st, index) => (
+                      console.log(st),
                       <RecommendedCard
                         key={st.id}
                         name={st.scheme_type_name}
@@ -586,6 +609,9 @@ export function DashboardScreen({ navigation }: Props) {
                         onExplore={() =>
                           navigation.navigate('SchemeDetails', { schemeId: String(st.id) })
                         }
+                        mostPopularText={texts.dashboard.mostPopular}
+                        fixedMonthlyText={st.scheme_category ?? texts.dashboard.fixedMonthly}
+                        exploreDetailsText={texts.dashboard.exploreDetails}
                       />
                     ))}
                   </ScrollView>
@@ -600,8 +626,8 @@ export function DashboardScreen({ navigation }: Props) {
               {isLoggedIn && data?.paymenthistory && data.paymenthistory.length > 0 && (
                 <>
                   <SectionHeader
-                    title="RECENT TRANSACTIONS"
-                    action="HISTORY"
+                    title={texts.dashboard.recentTransactions}
+                    action={texts.dashboard.history}
                     actionAccent
                     onActionPress={() => navigation.navigate('ActivityHistory')}
                   />
@@ -609,27 +635,25 @@ export function DashboardScreen({ navigation }: Props) {
                     {data.paymenthistory.map((p, i) => (
                       <TransactionItem
                         key={i}
-                        title="Installment Payment"
+                        title={texts.dashboard.installmentPayment}
                         date={p.installment_date}
                         amount={p.installment_amount}
+                        successText={texts.dashboard.success}
                       />
                     ))}
                   </View>
                 </>
               )}
 
-              <SupportCard />
+              <SupportCard 
+                needAssistanceText={texts.dashboard.needAssistance}
+                whatsappSupportText={texts.dashboard.whatsappSupport}
+              />
             </View>
           </ScrollView>
         )}
 
-        <BottomTabs
-          safeBottomInset={safeBottom}
-          onJoinNewPress={() => navigation.navigate('SelectScheme')}
-          onMySchemesPress={() => navigation.navigate('MySchemes')}
-          onActivityPress={() => navigation.navigate('ActivityHistory')}
-          onAccountPress={() => navigation.navigate('Profile')}
-        />
+        <BottomTabs navigation={navigation} activeTab="home" />
       </View>
     </SafeAreaView>
   );
@@ -661,29 +685,29 @@ const styles = StyleSheet.create({
     borderBottomLeftRadius: 28,
     borderBottomRightRadius: 28,
     backgroundColor: '#FFFFFF',
-    paddingHorizontal: 16,
-    paddingVertical: 22,
+    paddingHorizontal: 18,
+    paddingVertical: 20,
     flexDirection: 'row',
     alignItems: 'center',
     borderWidth: 1,
-    borderColor: '#ECEFF3',
-    marginTop: 25,
-    shadowColor: '#111827',
+    borderColor: '#F0F0F0',
+    marginTop: 24,
+    shadowColor: '#000000',
     shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.05,
+    shadowOpacity: 0.06,
     shadowRadius: 16,
-    elevation: 2,
+    elevation: 4,
   },
   profileBadge: {
-    width: 34,
-    height: 34,
-    borderRadius: 12,
-    borderWidth: 1.2,
-    borderColor: '#F6B144',
+    width: 44,
+    height: 44,
+    borderRadius: 14,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: '#FFF8EA',
+    // backgroundColor: '#FFF5E6',
     marginLeft: 2,
+    // borderWidth: 1,
+    borderColor: '#FFE8CC',
   },
   profileIcon: {
     fontSize: 16,
@@ -692,33 +716,35 @@ const styles = StyleSheet.create({
   },
   welcomeTextWrap: {
     flex: 1,
-    marginLeft: 12,
+    marginLeft: 14,
   },
   welcomeLabel: {
     fontSize: 10,
     fontFamily: 'Poppins-SemiBold',
     letterSpacing: 1.2,
     color: '#9AA3B2',
+    textTransform: 'uppercase',
   },
   welcomeName: {
-    marginTop: 3,
-    fontSize: 16,
-    fontFamily: 'Poppins-SemiBold',
+    marginTop: 2,
+    fontSize: 17,
+    fontFamily: 'Poppins-Bold',
     color: '#111827',
   },
   topActions: {
     flexDirection: 'row',
-    gap: 8,
+    gap: 10,
     alignItems: 'center',
   },
   roundIcon: {
-    width: 30,
-    height: 30,
-    borderRadius: 15,
+    width: 38,
+    height: 38,
+    borderRadius: 12,
     justifyContent: 'center',
     alignItems: 'center',
-    marginRight: 2,
-    backgroundColor: '#F8FAFC',
+    backgroundColor: '#F5F7FA',
+    borderWidth: 1,
+    borderColor: '#E8EBEF',
   },
   roundIconText: {
     fontWeight: '700',
@@ -728,152 +754,164 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginTop: 2,
+    marginTop: 4,
+    marginBottom: 2,
   },
   sectionTitle: {
-    fontSize: 10,
+    fontSize: 11,
     fontFamily: 'Poppins-Bold',
-    letterSpacing: 1.6,
+    letterSpacing: 1.4,
     color: '#96A0AE',
+    textTransform: 'uppercase',
   },
   sectionAction: {
-    fontSize: 10,
+    fontSize: 11,
     color: '#8B94A3',
     fontFamily: 'Poppins-SemiBold',
   },
   sectionActionButton: {
-    paddingVertical: 2,
+    paddingVertical: 4,
+    paddingHorizontal: 4,
   },
   accentText: {
     color: '#E88800',
+    fontFamily: 'Poppins-Bold',
   },
   liveMarketCard: {
     backgroundColor: '#E88800',
-    borderRadius: 18,
-    paddingHorizontal: 16,
-    paddingVertical: 18,
+    borderRadius: 20,
+    paddingHorizontal: 18,
+    paddingVertical: 20,
     shadowColor: '#C2410C',
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.25,
-    shadowRadius: 12,
-    elevation: 4,
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.3,
+    shadowRadius: 16,
+    elevation: 6,
   },
   liveMarketTopRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 10,
+    marginBottom: 12,
   },
   liveMarketLeft: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 10,
+    gap: 12,
     flex: 1,
   },
   liveMarketIconCircle: {
-    width: 34,
-    height: 34,
-    borderRadius: 17,
-    backgroundColor: 'rgba(255,255,255,0.22)',
+    width: 38,
+    height: 38,
+    borderRadius: 12,
+    backgroundColor: 'rgba(255,255,255,0.2)',
     justifyContent: 'center',
     alignItems: 'center',
   },
   liveMarketRateLabel: {
-    fontSize: 10,
+    fontSize: 11,
     fontFamily: 'Poppins-Bold',
-    letterSpacing: 1,
+    letterSpacing: 1.2,
     color: '#FFFFFF',
+    textTransform: 'uppercase',
   },
   liveMarketLiveBadge: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
-    backgroundColor: '#6B7280',
-    paddingHorizontal: 10,
-    paddingVertical: 5,
-    borderRadius: 999,
+    backgroundColor: 'rgba(0,0,0,0.25)',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 20,
   },
   liveMarketDot: {
-    width: 6,
-    height: 6,
-    borderRadius: 3,
-    backgroundColor: '#EF4444',
+    width: 7,
+    height: 7,
+    borderRadius: 4,
+    backgroundColor: '#FF4444',
   },
   liveMarketLiveText: {
     fontSize: 10,
     fontFamily: 'Poppins-Bold',
     color: '#FFFFFF',
-    letterSpacing: 0.5,
+    letterSpacing: 0.8,
   },
   liveMarketPrice: {
-    fontSize: 30,
+    fontSize: 34,
     fontFamily: 'Poppins-Black',
     color: '#FFFFFF',
+    marginTop: 4,
   },
   liveMarketPerGram: {
     fontSize: 13,
-    color: 'rgba(255,255,255,0.92)',
-    marginTop: 4,
+    color: 'rgba(255,255,255,0.85)',
+    marginTop: 2,
     fontFamily: 'Poppins-Medium',
   },
   liveMarketDivider: {
-    height: StyleSheet.hairlineWidth,
-    backgroundColor: 'rgba(255,255,255,0.45)',
-    marginVertical: 14,
+    height: 1,
+    backgroundColor: 'rgba(255,255,255,0.25)',
+    marginVertical: 16,
   },
   liveMarketFooterCta: {
     textAlign: 'center',
     fontSize: 12,
     fontFamily: 'Poppins-Bold',
     color: '#FFFFFF',
-    letterSpacing: 0.4,
+    letterSpacing: 1,
+    textTransform: 'uppercase',
   },
   investmentRow: {
     flexDirection: 'row',
-    gap: 10,
+    gap: 12,
   },
   investmentCard: {
     flex: 1,
     backgroundColor: '#FFFFFF',
     borderRadius: 20,
     padding: 16,
+    minHeight: 140,
     borderWidth: 1,
-    borderColor: '#E8E8E8',
+    borderColor: '#F0F0F0',
     shadowColor: '#111827',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.06,
-    shadowRadius: 10,
-    elevation: 2,
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.08,
+    shadowRadius: 12,
+    elevation: 3,
   },
   investmentIconCircle: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
+    width: 44,
+    height: 44,
+    borderRadius: 14,
     justifyContent: 'center',
     alignItems: 'center',
-    marginBottom: 10,
+    marginBottom: 12,
   },
   investmentIconCircleGold: {
-    backgroundColor: '#FFF3E0',
+    backgroundColor: '#FFF5E6',
+    borderWidth: 1,
+    borderColor: '#FFE8CC',
   },
   investmentIconCircleInr: {
     backgroundColor: '#E8F8F0',
+    borderWidth: 1,
+    borderColor: '#C8F0DC',
   },
   investmentRupeeIcon: {
-    fontSize: 18,
+    fontSize: 20,
     fontFamily: 'Poppins-Bold',
     color: '#27AE60',
-    marginTop: -2,
   },
   investmentCardLabel: {
     fontSize: 10,
     fontFamily: 'Poppins-SemiBold',
-    letterSpacing: 1,
+    letterSpacing: 1.2,
     color: '#808080',
     marginBottom: 6,
+    textTransform: 'uppercase',
   },
   investmentCardValue: {
-    fontSize: 20,
+    fontSize: 22,
     fontFamily: 'Poppins-Black',
     color: '#1A1C24',
     marginBottom: 8,
@@ -889,9 +927,9 @@ const styles = StyleSheet.create({
     alignSelf: 'flex-start',
     gap: 4,
     backgroundColor: '#E8F5E9',
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 999,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 20,
   },
   investmentGrowthText: {
     fontSize: 12,
@@ -899,66 +937,69 @@ const styles = StyleSheet.create({
     color: '#27AE60',
   },
   investmentGrowthPlaceholder: {
-    minHeight: 22,
+    minHeight: 24,
   },
   joinButton: {
-    borderRadius: 20,
+    borderRadius: 16,
     backgroundColor: '#101720',
-    minHeight: 66,
+    minHeight: 60,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 12,
-    marginTop: 2,
+    gap: 14,
+    marginTop: 4,
+    paddingHorizontal: 20,
+    paddingVertical: 14,
     shadowColor: '#0B0F17',
-    shadowOffset: { width: 0, height: 10 },
-    shadowOpacity: 0.18,
-    shadowRadius: 14,
-    elevation: 4,
+    shadowOffset: { width: 0, height: 12 },
+    shadowOpacity: 0.2,
+    shadowRadius: 16,
+    elevation: 6,
   },
   plusBubble: {
-    width: 32,
-    height: 32,
-    borderRadius: 12,
-    backgroundColor: '#F7A714',
+    width: 36,
+    height: 36,
     justifyContent: 'center',
     alignItems: 'center',
   },
   plusText: {
     color: '#FFFFFF',
-    fontSize: 22,
+    fontSize: 24,
     fontWeight: '700',
-    marginTop: -1,
   },
   joinButtonText: {
     color: '#FFFFFF',
-    fontSize: 11,
+    fontSize: 13,
     fontFamily: 'Poppins-Black',
-    letterSpacing: 1.6,
-    marginTop: 1,
+    letterSpacing: 1.8,
+    flexShrink: 1,
+    textAlign: 'center',
+    textTransform: 'uppercase',
   },
   schemeItem: {
     backgroundColor: '#FFFFFF',
     borderRadius: 18,
     borderWidth: 1,
-    borderColor: '#E8EBEF',
-    padding: 14,
+    borderColor: '#F0F0F0',
+    padding: 16,
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 12,
+    gap: 14,
     shadowColor: '#111827',
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.05,
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.06,
     shadowRadius: 12,
-    elevation: 2,
+    elevation: 3,
   },
   schemeBadge: {
-    width: 44,
-    height: 44,
+    width: 48,
+    height: 48,
     borderRadius: 14,
-    backgroundColor: '#FFF5E7',
+    backgroundColor: '#FFF5E6',
     justifyContent: 'center',
     alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#FFE8CC',
   },
   schemeBadgeText: {
     color: '#E28A00',
@@ -973,11 +1014,12 @@ const styles = StyleSheet.create({
     color: '#131A28',
   },
   schemeDue: {
-    marginTop: 2,
+    marginTop: 4,
     fontSize: 10,
     letterSpacing: 0.8,
     color: '#98A2B3',
     fontFamily: 'Poppins-Medium',
+    textTransform: 'uppercase',
   },
   schemeDueOverdue: {
     color: '#E05252',
@@ -986,7 +1028,7 @@ const styles = StyleSheet.create({
     alignItems: 'flex-end',
   },
   schemeAmount: {
-    fontSize: 14,
+    fontSize: 15,
     fontFamily: 'Poppins-Black',
     color: '#111827',
   },
@@ -994,37 +1036,38 @@ const styles = StyleSheet.create({
     marginTop: 6,
     backgroundColor: '#E8FFF5',
     color: '#0F9E63',
-    paddingVertical: 3,
-    paddingHorizontal: 10,
-    borderRadius: 999,
+    paddingVertical: 4,
+    paddingHorizontal: 12,
+    borderRadius: 20,
     fontSize: 9,
-    fontFamily: 'Poppins-SemiBold',
+    fontFamily: 'Poppins-Bold',
     overflow: 'hidden',
+    letterSpacing: 0.5,
   },
   overduePill: {
     backgroundColor: '#FFF0F0',
     color: '#E05252',
   },
   recommendedCard: {
-    width: 256,
+    width: 260,
     borderRadius: 20,
     overflow: 'hidden',
     borderWidth: 1,
-    borderColor: '#E8EBEF',
+    borderColor: '#F0F0F0',
     backgroundColor: '#FFFFFF',
     shadowColor: '#111827',
     shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.06,
-    shadowRadius: 12,
-    elevation: 2,
+    shadowOpacity: 0.08,
+    shadowRadius: 14,
+    elevation: 4,
   },
   recommendedScrollContent: {
-    paddingRight: 2,
-    gap: 12,
+    paddingRight: 4,
+    gap: 14,
   },
   recommendedTop: {
-    minHeight: 126,
-    padding: 16,
+    minHeight: 140,
+    padding: 18,
     justifyContent: 'flex-end',
     overflow: 'hidden',
   },
@@ -1033,19 +1076,19 @@ const styles = StyleSheet.create({
   },
   recommendedOverlay: {
     ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'rgba(0,0,0,0.38)',
+    backgroundColor: 'rgba(0,0,0,0.35)',
   },
   popularTag: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 4,
+    gap: 5,
     position: 'absolute',
-    right: 12,
-    top: 12,
+    right: 14,
+    top: 14,
     backgroundColor: '#F7A714',
-    borderRadius: 14,
-    paddingHorizontal: 10,
-    paddingVertical: 5,
+    borderRadius: 16,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
   },
   popularTagText: {
     fontSize: 9,
@@ -1055,46 +1098,52 @@ const styles = StyleSheet.create({
   },
   recommendedTitle: {
     color: '#FFFFFF',
-    fontSize: 15,
+    fontSize: 16,
     fontFamily: 'Poppins-BoldItalic',
+    lineHeight: 22,
   },
   recommendedBody: {
-    padding: 16,
+    padding: 18,
   },
   recommendedRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 10,
+    marginBottom: 12,
   },
   monthPill: {
     fontSize: 10,
-    backgroundColor: '#FFF0DA',
+    backgroundColor: '#FFF5E6',
     color: '#E38A00',
-    fontFamily: 'Poppins-SemiBold',
-    paddingHorizontal: 10,
-    paddingVertical: 5,
-    borderRadius: 999,
+    fontFamily: 'Poppins-Bold',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 20,
     overflow: 'hidden',
   },
   fixedText: {
     fontSize: 10,
     color: '#98A2B3',
     fontFamily: 'Poppins-SemiBold',
-    letterSpacing: 0.9,
+    letterSpacing: 1,
+    textTransform: 'uppercase',
   },
   pointText: {
-    fontSize: 11,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    fontSize: 12,
     color: '#3A4658',
-    marginTop: 7,
+    marginTop: 8,
     fontFamily: 'Poppins-Medium',
+    lineHeight: 18,
   },
   exploreButton: {
-    marginTop: 14,
-    borderRadius: 12,
+    marginTop: 16,
+    borderRadius: 14,
     backgroundColor: '#111D36',
-    minHeight: 42,
-    paddingVertical: 11,
+    minHeight: 44,
+    paddingVertical: 12,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -1102,7 +1151,8 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     fontFamily: 'Poppins-Black',
     fontSize: 11,
-    letterSpacing: 1.8,
+    letterSpacing: 1.6,
+    textTransform: 'uppercase',
   },
   marketCard: {
     backgroundColor: '#FFFFFF',
@@ -1160,27 +1210,27 @@ const styles = StyleSheet.create({
   transactionsCard: {
     backgroundColor: '#FFFFFF',
     borderWidth: 1,
-    borderColor: '#E8EBEF',
-    borderRadius: 18,
+    borderColor: '#F0F0F0',
+    borderRadius: 20,
     overflow: 'hidden',
     shadowColor: '#111827',
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.05,
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.06,
     shadowRadius: 12,
-    elevation: 2,
+    elevation: 3,
   },
   transactionItem: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 14,
-    paddingVertical: 13,
-    gap: 12,
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+    gap: 14,
   },
   currencyDot: {
-    width: 36,
-    height: 36,
+    width: 40,
+    height: 40,
     borderRadius: 12,
-    backgroundColor: '#F3F4F6',
+    backgroundColor: '#F5F7FA',
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -1197,9 +1247,10 @@ const styles = StyleSheet.create({
     fontFamily: 'Poppins-SemiBold',
   },
   transactionDate: {
-    marginTop: 2,
+    marginTop: 3,
     color: '#94A3B8',
     fontSize: 11,
+    fontFamily: 'Poppins-Medium',
   },
   transactionRight: {
     alignItems: 'flex-end',
@@ -1207,45 +1258,44 @@ const styles = StyleSheet.create({
   transactionAmount: {
     color: '#131A28',
     fontFamily: 'Poppins-Black',
-    fontSize: 14,
+    fontSize: 15,
   },
   successText: {
-    marginTop: 2,
+    marginTop: 3,
     color: '#0F9E63',
     fontSize: 9,
     letterSpacing: 0.8,
-    fontFamily: 'Poppins-SemiBold',
+    fontFamily: 'Poppins-Bold',
+    textTransform: 'uppercase',
   },
   separator: {
     height: 1,
     backgroundColor: '#E5E7EB',
   },
   supportCard: {
-    marginTop: 2,
-    borderRadius: 18,
+    marginTop: 4,
+    borderRadius: 20,
     borderWidth: 1,
-    borderColor: '#BAEFD1',
-    backgroundColor: '#E2F8EC',
-    padding: 14,
+    borderColor: '#C8F0DC',
+    backgroundColor: '#E8F8F0',
+    padding: 16,
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
     shadowColor: '#15803D',
     shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.08,
-    shadowRadius: 12,
-    elevation: 2,
+    shadowOpacity: 0.1,
+    shadowRadius: 14,
+    elevation: 3,
   },
   supportLeft: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 12,
+    gap: 14,
   },
   supportIconCircle: {
-    width: 40,
-    height: 40,
-    borderRadius: 12,
-    backgroundColor: '#FFFFFF',
+    width: 44,
+    height: 44,
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -1255,74 +1305,20 @@ const styles = StyleSheet.create({
   },
   supportTopLabel: {
     color: '#0B6A57',
-    letterSpacing: 0.8,
+    letterSpacing: 1,
     fontSize: 10,
     fontFamily: 'Poppins-SemiBold',
+    textTransform: 'uppercase',
   },
   supportTitle: {
-    marginTop: 2,
+    marginTop: 3,
     color: '#1F2937',
-    fontSize: 14,
-    fontFamily: 'Poppins-SemiBold',
+    fontSize: 15,
+    fontFamily: 'Poppins-Bold',
   },
   supportArrow: {
     color: '#22A45E',
-    fontSize: 20,
-    fontFamily: 'Poppins-SemiBold',
-  },
-  bottomTabsWrap: {
-    position: 'absolute',
-    left: 0,
-    right: 0,
-    bottom: 0,
-    backgroundColor: '#FFFFFF',
-    borderTopWidth: 1,
-    borderColor: '#E8EBEF',
-    shadowColor: '#111827',
-    shadowOffset: { width: 0, height: -5 },
-    shadowOpacity: 0.04,
-    shadowRadius: 8,
-    elevation: 8,
-    zIndex: 20,
-  },
-  bottomTabs: {
-    minHeight: 64,
-    paddingHorizontal: 12,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-  },
-  bottomTabItem: {
-    flex: 1,
-    minHeight: 56,
-    paddingVertical: 6,
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 2,
-  },
-  bottomTabLabelWrap: {
-    minHeight: 16,
-    justifyContent: 'center',
-    alignItems: 'center',
-    width: '100%',
-  },
-  bottomTabIcon: {
-    fontSize: 18,
-    fontFamily: 'Poppins-SemiBold',
-    color: '#9AA3B2',
-  },
-  bottomTabIconActive: {
-    color: '#E88800',
-  },
-  bottomTabLabel: {
-    fontSize: 10,
-    lineHeight: 13,
-    color: '#9AA3B2',
-    fontFamily: 'Poppins-Medium',
-    textAlign: 'center',
-    width: '100%',
-  },
-  bottomTabLabelActive: {
-    color: '#E88800',
+    fontSize: 24,
+    fontFamily: 'Poppins-Bold',
   },
 });

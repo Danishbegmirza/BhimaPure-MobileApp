@@ -152,7 +152,7 @@ export function PaymentMethodScreen({ navigation, route }: Props) {
         key: razorpayKey,
         amount: Math.round((order.amount ?? amount) * 100),
         currency: order.currency ?? 'INR',
-        name: 'Bhima Pure',
+        name: 'Bhima Smart Gold',
         description: schemeDisplayName ?? 'Scheme payment',
         order_id: String(order.order_id),
         theme: { color: '#F39200' },

@@ -1,6 +1,9 @@
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
+  Animated,
+  Dimensions,
+  Modal,
   Pressable,
   SafeAreaView,
   ScrollView,
@@ -16,6 +19,8 @@ import type { RootStackParamList } from '../navigation/types';
 import { fetchMyPortfolio, type PortfolioScheme, type PortfolioCounts } from '../api/portfolio';
 import { getToken } from '../storage/auth';
 import { goBackOrDashboard } from '../navigation/backNavigation';
+import { BottomTabs } from '../components/BottomTabs';
+import { useSafeBottomInset } from '../utils/safeBottomInset';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'MySchemes'>;
 type FilterState = 'all' | 'active' | 'matured' | 'redeemed';
@@ -40,8 +45,11 @@ function formatDate(dateStr: string): string {
   }).toUpperCase();
 }
 
-/** Rough monthly installment until the API returns an explicit due amount. */
-function estimateInstallmentAmount(scheme: PortfolioScheme): number {
+/** Get installment amount from scheme_amount or estimate */
+function getInstallmentAmount(scheme: PortfolioScheme): number {
+  if (scheme.scheme_amount != null && scheme.scheme_amount > 0) {
+    return scheme.scheme_amount;
+  }
   const { total_invested, progress_percent } = scheme.metrics;
   if (total_invested > 0 && progress_percent > 0) {
     const assumedMonths = 11;
@@ -49,6 +57,10 @@ function estimateInstallmentAmount(scheme: PortfolioScheme): number {
     return Math.max(500, Math.round(total_invested / paidSlots));
   }
   return 1000;
+}
+
+function formatINR(value: number): string {
+  return value.toLocaleString('en-IN');
 }
 
 // ─── Sub-components ───────────────────────────────────────────────────────────
@@ -88,7 +100,12 @@ function SchemePortfolioCard({
   onPrimaryAction: () => void;
 }) {
   const isOverdue = scheme.next_payment?.status === 'OVERDUE';
-  const isMatured = scheme.status === 'MATURED';
+  const statusUpper = scheme.status?.toUpperCase() || '';
+  const isMatured = statusUpper === 'MATURED';
+  const isPaymentCompleted = statusUpper === 'PAYMENT COMPLETED';
+  const isRedeemed = statusUpper === 'REDEEMED';
+
+  const showActionButton = !isRedeemed && !isPaymentCompleted;
   const actionLabel = isMatured ? 'REDEEM' : 'PAY NOW';
 
   return (
@@ -155,15 +172,20 @@ function SchemePortfolioCard({
 
       {/* Actions */}
       <View style={styles.actionRow}>
-        <Pressable style={styles.secondaryButton} onPress={onViewDetails}>
+        <Pressable
+          style={[styles.secondaryButton, !showActionButton && styles.fullWidthButton]}
+          onPress={onViewDetails}
+        >
           <Text style={styles.secondaryButtonText}>VIEW DETAILS</Text>
         </Pressable>
-        <Pressable
-          style={[styles.primaryButton, isMatured && styles.redeemButton]}
-          onPress={onPrimaryAction}
-        >
-          <Text style={styles.primaryButtonText}>{actionLabel}</Text>
-        </Pressable>
+        {showActionButton && (
+          <Pressable
+            style={[styles.primaryButton, isMatured && styles.redeemButton]}
+            onPress={onPrimaryAction}
+          >
+            <Text style={styles.primaryButtonText}>{actionLabel}</Text>
+          </Pressable>
+        )}
       </View>
     </View>
   );
@@ -172,6 +194,7 @@ function SchemePortfolioCard({
 // ─── Main Screen ──────────────────────────────────────────────────────────────
 
 export function MySchemesScreen({ navigation }: Props) {
+  const safeBottom = useSafeBottomInset();
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -186,6 +209,13 @@ export function MySchemesScreen({ navigation }: Props) {
 
   const [filter, setFilter] = useState<FilterState>('all');
 
+  // ── Variable installment amount modal state ─────────────────────────────────
+  const [isAmountModalVisible, setIsAmountModalVisible] = useState(false);
+  const [selectedSchemeForPayment, setSelectedSchemeForPayment] = useState<PortfolioScheme | null>(null);
+  const [tempAmount, setTempAmount] = useState<string>('');
+  const [amountError, setAmountError] = useState<string>('');
+  const slideAnim = useRef(new Animated.Value(0)).current;
+
   const loadPortfolio = useCallback(async () => {
     try {
       setLoading(true);
@@ -196,6 +226,7 @@ export function MySchemesScreen({ navigation }: Props) {
         return;
       }
       const result = await fetchMyPortfolio(token);
+      console.log('fetchMyPortfolio', result);
       if (result.success) {
         setTotalInvested(result.totalInvested ?? '0');
         setBonusEarned(result.bonusearned ?? '');
@@ -227,10 +258,107 @@ export function MySchemesScreen({ navigation }: Props) {
     }
   })();
 
+  // ── Amount validation ──────────────────────────────────────────────────────
+  const validateInstallmentAmount = useCallback((amountStr: string, scheme: PortfolioScheme): string => {
+    const amount = parseInt(amountStr, 10);
+    if (isNaN(amount) || amount === 0) { return ''; }
+
+    const minAmount = parseFloat(scheme.scheme?.min_amount || '500');
+    const maxAmount = parseFloat(scheme.scheme?.max_amount || '100000');
+    const multipleOf = scheme.scheme?.multiple_of || 1;
+
+    if (amount < minAmount) {
+      return `Amount should be at least ₹${formatINR(minAmount)}.`;
+    }
+    if (amount > maxAmount) {
+      return `Amount should not exceed ₹${formatINR(maxAmount)}.`;
+    }
+    if (multipleOf > 1 && amount % multipleOf !== 0) {
+      return `Please enter an amount in multiples of ₹${formatINR(multipleOf)}.`;
+    }
+    return '';
+  }, []);
+
+  // ── Modal handlers ─────────────────────────────────────────────────────────
+  const openAmountModal = useCallback((scheme: PortfolioScheme) => {
+    setSelectedSchemeForPayment(scheme);
+    setTempAmount(scheme.scheme_amount?.toString() || '');
+    setAmountError('');
+    setIsAmountModalVisible(true);
+    Animated.spring(slideAnim, {
+      toValue: 1,
+      useNativeDriver: true,
+      tension: 65,
+      friction: 11,
+    }).start();
+  }, [slideAnim]);
+
+  const closeAmountModal = useCallback(() => {
+    Animated.timing(slideAnim, {
+      toValue: 0,
+      duration: 200,
+      useNativeDriver: true,
+    }).start(() => {
+      setIsAmountModalVisible(false);
+      setSelectedSchemeForPayment(null);
+      setAmountError('');
+    });
+  }, [slideAnim]);
+
+  const handleNumpadPress = useCallback((digit: string) => {
+    setTempAmount(prev => {
+      if (digit === 'backspace') {
+        return prev.slice(0, -1);
+      }
+      if (digit === '000') {
+        return prev + '000';
+      }
+      const newAmount = prev + digit;
+      if (parseInt(newAmount, 10) > 10000000) { return prev; }
+      return newAmount;
+    });
+    setAmountError('');
+  }, []);
+
+  const handleConfirmAmount = useCallback(() => {
+    if (!selectedSchemeForPayment || !tempAmount) { return; }
+    const error = validateInstallmentAmount(tempAmount, selectedSchemeForPayment);
+    if (error) {
+      setAmountError(error);
+      return;
+    }
+    const amount = parseInt(tempAmount, 10);
+    closeAmountModal();
+    navigation.navigate('PaymentMethod', {
+      schemeId: String(selectedSchemeForPayment.id),
+      customerSchemeId: selectedSchemeForPayment.id,
+      paymentContext: 'INSTALLMENT_PAYMENT',
+      amount: amount,
+      schemeDisplayName: selectedSchemeForPayment.scheme.name,
+    });
+  }, [selectedSchemeForPayment, tempAmount, validateInstallmentAmount, closeAmountModal, navigation]);
+
+  // ── Handle pay now action ──────────────────────────────────────────────────
+  const handlePayNow = useCallback((scheme: PortfolioScheme) => {
+    if (scheme.variable_installment_allow === true) {
+      openAmountModal(scheme);
+    } else {
+      const amount = getInstallmentAmount(scheme);
+      navigation.navigate('PaymentMethod', {
+        schemeId: String(scheme.id),
+        customerSchemeId: scheme.id,
+        paymentContext: 'INSTALLMENT_PAYMENT',
+        amount: amount,
+        schemeDisplayName: scheme.scheme.name,
+      });
+    }
+  }, [navigation, openAmountModal]);
+
   return (
     <SafeAreaView style={styles.safeArea}>
       <StatusBar barStyle="light-content" backgroundColor="#050505" />
-      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.content}>
+      <View style={styles.screenBody}>
+      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={[styles.content, { paddingBottom: 100 + safeBottom }]}>
 
         {/* Hero */}
         <View style={styles.hero}>
@@ -339,13 +467,7 @@ export function MySchemesScreen({ navigation }: Props) {
               onPrimaryAction={() =>
                 scheme.status === 'MATURED'
                   ? navigation.navigate('GoldRedemption', { schemeId: String(scheme.id) })
-                  : navigation.navigate('PaymentMethod', {
-                      schemeId: String(scheme.id),
-                      customerSchemeId: scheme.id,
-                      paymentContext: 'INSTALLMENT_PAYMENT',
-                      amount: estimateInstallmentAmount(scheme),
-                      schemeDisplayName: scheme.scheme.name,
-                    })
+                  : handlePayNow(scheme)
               }
             />
           ))
@@ -360,6 +482,112 @@ export function MySchemesScreen({ navigation }: Props) {
           </View>
         )}
       </ScrollView>
+      <BottomTabs navigation={navigation} activeTab="mySchemes" />
+      </View>
+
+      {/* ── Variable Installment Amount Modal ─────────────────────────────────── */}
+      <Modal
+        visible={isAmountModalVisible}
+        transparent
+        animationType="none"
+        onRequestClose={closeAmountModal}
+      >
+        <Pressable style={styles.modalOverlay} onPress={closeAmountModal}>
+          <Animated.View
+            style={[
+              styles.modalContent,
+              {
+                transform: [{
+                  translateY: slideAnim.interpolate({
+                    inputRange: [0, 1],
+                    outputRange: [Dimensions.get('window').height, 0],
+                  }),
+                }],
+              },
+            ]}
+          >
+            <Pressable onPress={() => {}}>
+              <View style={styles.modalHandle} />
+
+              <Text style={styles.modalLabel}>INSTALLMENT AMOUNT</Text>
+
+              <View style={styles.modalAmountDisplay}>
+                <Text style={styles.rupeeSymbol}>₹</Text>
+                <Text style={styles.modalAmountText}>
+                  {tempAmount || '0'}
+                </Text>
+              </View>
+
+              <Text style={styles.modalHint}>
+                {tempAmount
+                  ? 'CONFIRM YOUR INSTALLMENT AMOUNT'
+                  : 'ENTER AMOUNT TO PAY'}
+              </Text>
+
+              {selectedSchemeForPayment?.scheme?.multiple_of && selectedSchemeForPayment.scheme.multiple_of > 1 && (
+                <View style={styles.helperWrap}>
+                  <Ionicons name="information-circle-outline" size={14} color="#9CA3AF" />
+                  <Text style={styles.helperText}>
+                    Enter amount in multiples of ₹{formatINR(selectedSchemeForPayment.scheme.multiple_of)}
+                  </Text>
+                </View>
+              )}
+
+              {amountError ? (
+                <View style={styles.modalErrorWrap}>
+                  <Ionicons name="alert-circle" size={14} color="#EF4444" />
+                  <Text style={styles.modalErrorText}>{amountError}</Text>
+                </View>
+              ) : null}
+
+              {/* Numpad */}
+              <View style={styles.numpad}>
+                {[
+                  ['1', '2', '3'],
+                  ['4', '5', '6'],
+                  ['7', '8', '9'],
+                  ['000', '0', 'backspace'],
+                ].map((row, rowIndex) => (
+                  <View key={rowIndex} style={styles.numpadRow}>
+                    {row.map(key => (
+                      <Pressable
+                        key={key}
+                        style={[
+                          styles.numpadKey,
+                          key === 'backspace' && styles.numpadKeyBackspace,
+                        ]}
+                        onPress={() => handleNumpadPress(key)}
+                      >
+                        {key === 'backspace' ? (
+                          <Ionicons name="backspace-outline" size={22} color="#F5F5F3" />
+                        ) : (
+                          <Text style={styles.numpadKeyText}>{key}</Text>
+                        )}
+                      </Pressable>
+                    ))}
+                  </View>
+                ))}
+              </View>
+
+              {/* Confirm button */}
+              <Pressable
+                style={[
+                  styles.modalConfirmButton,
+                  (!tempAmount || (selectedSchemeForPayment && validateInstallmentAmount(tempAmount, selectedSchemeForPayment))) && styles.modalConfirmButtonDisabled,
+                ]}
+                onPress={handleConfirmAmount}
+                disabled={!tempAmount || !!(selectedSchemeForPayment && validateInstallmentAmount(tempAmount, selectedSchemeForPayment))}
+              >
+                <Text style={styles.modalConfirmText}>
+                  {tempAmount
+                    ? `PAY ₹${formatINR(parseInt(tempAmount, 10))}`
+                    : 'ENTER AN AMOUNT'}
+                </Text>
+              </Pressable>
+            </Pressable>
+          </Animated.View>
+        </Pressable>
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -368,6 +596,9 @@ const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
     backgroundColor: '#F5F5F3',
+  },
+  screenBody: {
+    flex: 1,
   },
   content: {
     paddingBottom: 24,
@@ -719,6 +950,9 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
   },
+  fullWidthButton: {
+    flex: 2,
+  },
   secondaryButtonText: {
     color: '#111827',
     fontSize: 10,
@@ -772,5 +1006,127 @@ const styles = StyleSheet.create({
     fontSize: 8,
     fontFamily: 'Poppins-SemiBold',
     letterSpacing: 1.3,
+  },
+  // ── Amount Entry Modal ─────────────────────────────────────────────────────
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.7)',
+    justifyContent: 'flex-end',
+  },
+  modalContent: {
+    backgroundColor: '#1A1A1A',
+    borderTopLeftRadius: 28,
+    borderTopRightRadius: 28,
+    paddingHorizontal: 20,
+    paddingTop: 12,
+    paddingBottom: 34,
+  },
+  modalHandle: {
+    width: 48,
+    height: 5,
+    borderRadius: 3,
+    backgroundColor: '#4B5563',
+    alignSelf: 'center',
+    marginBottom: 20,
+  },
+  modalLabel: {
+    color: '#9CA3AF',
+    fontSize: 10,
+    fontFamily: 'Poppins-Bold',
+    letterSpacing: 2,
+    textAlign: 'center',
+  },
+  modalAmountDisplay: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 16,
+    marginBottom: 8,
+  },
+  rupeeSymbol: {
+    color: '#F39200',
+    fontSize: 32,
+    fontFamily: 'Poppins-Bold',
+    marginRight: 4,
+  },
+  modalAmountText: {
+    color: '#FFFFFF',
+    fontSize: 56,
+    fontFamily: 'Poppins-Black',
+  },
+  modalHint: {
+    color: '#F39200',
+    fontSize: 10,
+    fontFamily: 'Poppins-Bold',
+    letterSpacing: 1.5,
+    textAlign: 'center',
+    marginBottom: 16,
+  },
+  helperWrap: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    marginBottom: 12,
+  },
+  helperText: {
+    color: '#9CA3AF',
+    fontSize: 11,
+    fontFamily: 'Poppins-Medium',
+  },
+  modalErrorWrap: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    marginBottom: 16,
+    paddingHorizontal: 16,
+  },
+  modalErrorText: {
+    color: '#EF4444',
+    fontSize: 11,
+    fontFamily: 'Poppins-Medium',
+    textAlign: 'center',
+  },
+  numpad: {
+    gap: 10,
+  },
+  numpadRow: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    gap: 10,
+  },
+  numpadKey: {
+    width: 100,
+    height: 56,
+    borderRadius: 14,
+    backgroundColor: '#2A2A2A',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  numpadKeyBackspace: {
+    backgroundColor: '#3D3D00',
+  },
+  numpadKeyText: {
+    color: '#F5F5F3',
+    fontSize: 22,
+    fontFamily: 'Poppins-Bold',
+  },
+  modalConfirmButton: {
+    marginTop: 20,
+    minHeight: 56,
+    borderRadius: 24,
+    backgroundColor: '#F5C842',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  modalConfirmButtonDisabled: {
+    backgroundColor: '#3D3D3D',
+  },
+  modalConfirmText: {
+    color: '#111827',
+    fontSize: 12,
+    fontFamily: 'Poppins-Black',
+    letterSpacing: 1.1,
   },
 });

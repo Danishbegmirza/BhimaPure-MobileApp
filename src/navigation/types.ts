@@ -27,6 +27,7 @@ export type RootStackParamList = {
   };
   PaymentSuccess: { schemeId: string };
   Notifications: undefined;
+  NotificationDetail: { notificationId: string };
   ActivityHistory: undefined;
   Profile: undefined;
   EditProfile: undefined;

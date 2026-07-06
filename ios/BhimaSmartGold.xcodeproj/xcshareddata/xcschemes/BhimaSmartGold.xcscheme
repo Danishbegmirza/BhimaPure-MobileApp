@@ -15,9 +15,9 @@
             <BuildableReference
                BuildableIdentifier = "primary"
                BlueprintIdentifier = "13B07F861A680F5B00A75B9A"
-               BuildableName = "BhimaPure.app"
-               BlueprintName = "BhimaPure"
-               ReferencedContainer = "container:BhimaPure.xcodeproj">
+               BuildableName = "BhimaSmartGold.app"
+               BlueprintName = "BhimaSmartGold"
+               ReferencedContainer = "container:BhimaSmartGold.xcodeproj">
             </BuildableReference>
          </BuildActionEntry>
       </BuildActionEntries>
@@ -33,9 +33,9 @@
             <BuildableReference
                BuildableIdentifier = "primary"
                BlueprintIdentifier = "00E356ED1AD99517003FC87E"
-               BuildableName = "BhimaPureTests.xctest"
-               BlueprintName = "BhimaPureTests"
-               ReferencedContainer = "container:BhimaPure.xcodeproj">
+               BuildableName = "BhimaSmartGoldTests.xctest"
+               BlueprintName = "BhimaSmartGoldTests"
+               ReferencedContainer = "container:BhimaSmartGold.xcodeproj">
             </BuildableReference>
          </TestableReference>
       </Testables>
@@ -55,9 +55,9 @@
          <BuildableReference
             BuildableIdentifier = "primary"
             BlueprintIdentifier = "13B07F861A680F5B00A75B9A"
-            BuildableName = "BhimaPure.app"
-            BlueprintName = "BhimaPure"
-            ReferencedContainer = "container:BhimaPure.xcodeproj">
+            BuildableName = "BhimaSmartGold.app"
+            BlueprintName = "BhimaSmartGold"
+            ReferencedContainer = "container:BhimaSmartGold.xcodeproj">
          </BuildableReference>
       </BuildableProductRunnable>
    </LaunchAction>
@@ -72,9 +72,9 @@
          <BuildableReference
             BuildableIdentifier = "primary"
             BlueprintIdentifier = "13B07F861A680F5B00A75B9A"
-            BuildableName = "BhimaPure.app"
-            BlueprintName = "BhimaPure"
-            ReferencedContainer = "container:BhimaPure.xcodeproj">
+            BuildableName = "BhimaSmartGold.app"
+            BlueprintName = "BhimaSmartGold"
+            ReferencedContainer = "container:BhimaSmartGold.xcodeproj">
          </BuildableReference>
       </BuildableProductRunnable>
    </ProfileAction>

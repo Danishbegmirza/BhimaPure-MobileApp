@@ -15,6 +15,9 @@ import Ionicons from 'react-native-vector-icons/Ionicons';
 import type { RootStackParamList } from '../navigation/types';
 import { fetchSchemeTypes, type SchemeTypeItem } from '../api/schemes';
 import { goBackOrDashboard } from '../navigation/backNavigation';
+import { getToken } from '../storage/auth';
+import { BottomTabs } from '../components/BottomTabs';
+import { useSafeBottomInset } from '../utils/safeBottomInset';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'SelectScheme'>;
 
@@ -88,6 +91,7 @@ function SchemeCard({
 }
 
 export function SelectSchemeScreen({ navigation }: Props) {
+  const safeBottom = useSafeBottomInset();
   const [loading, setLoading] = useState(true);
   const [schemeTypes, setSchemeTypes] = useState<SchemeTypeItem[]>([]);
   const [error, setError] = useState<string | null>(null);
@@ -96,7 +100,9 @@ export function SelectSchemeScreen({ navigation }: Props) {
     try {
       setLoading(true);
       setError(null);
-      const result = await fetchSchemeTypes();
+      // Get token to send for language preference
+      const token = await getToken();
+      const result = await fetchSchemeTypes(token);
       if (result.success) {
         setSchemeTypes(result.schemetype);
       } else {
@@ -116,7 +122,8 @@ export function SelectSchemeScreen({ navigation }: Props) {
   return (
     <SafeAreaView style={styles.safeArea}>
       <StatusBar barStyle="dark-content" backgroundColor="#F5F5F4" />
-      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.content}>
+      <View style={styles.screenBody}>
+      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={[styles.content, { paddingBottom: 100 + safeBottom }]}>
         <View style={styles.header}>
           <Pressable onPress={() => goBackOrDashboard(navigation)} style={styles.iconButton}>
             <Ionicons name="arrow-back" size={20} color="#111827" />
@@ -158,6 +165,8 @@ export function SelectSchemeScreen({ navigation }: Props) {
         })
         )}
       </ScrollView>
+      <BottomTabs navigation={navigation} activeTab="joinNew" />
+      </View>
     </SafeAreaView>
   );
 }
@@ -166,6 +175,9 @@ const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
     backgroundColor: '#F5F5F4',
+  },
+  screenBody: {
+    flex: 1,
   },
   content: {
     paddingHorizontal: 12,

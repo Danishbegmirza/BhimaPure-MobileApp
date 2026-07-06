@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "647948996357",
+    "project_id": "bhima-9da42",
+    "storage_bucket": "bhima-9da42.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:647948996357:android:4752ba6bc3e2d4ea84316c",
+        "android_client_info": {
+          "package_name": "com.bhima.pure"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDaV0ZW-i9iFJtNSd1p9zd2xMvKnMSoAlY"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

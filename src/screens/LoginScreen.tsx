@@ -77,7 +77,7 @@ export function LoginScreen({ navigation }: Props) {
       <StatusBar barStyle="dark-content" backgroundColor="#F7F5F0" />
       <View style={styles.container}>
         <View style={styles.brandWrap}>
-          <Image source={require('../assets/loginIcon.png')} style={styles.brandLogo} resizeMode="contain" />
+          <Image source={require('../assets/logoJewlelleryFinal.png')} style={styles.brandLogo} resizeMode="cover" />
           <Text style={styles.brandCaption}>G O L D   S A V I N G S   S C H E M E S</Text>
         </View>
 
@@ -100,11 +100,7 @@ export function LoginScreen({ navigation }: Props) {
               style={styles.input}
               maxLength={10}
             />
-            <Ionicons
-              name="checkmark-circle-outline"
-              size={15}
-              color={isValidPhone ? '#00B060' : '#C3CAD5'}
-            />
+           <Image source={require('../assets/tick.png')} style={{width: 15, height: 15}} />  
           </View>
           {!!errorMsg && (
             <View style={styles.errorRow}>
@@ -139,7 +135,7 @@ export function LoginScreen({ navigation }: Props) {
 
           <View style={styles.infoCardBlue}>
             <View style={styles.infoIconBlue}>
-              <Ionicons name="shield-checkmark-outline" size={14} color="#5B6EFF" />
+            <Image source={require('../assets/secure.png')} style={{width: 30, height: 30, marginTop:10}} />
             </View>
             <View style={styles.infoTextWrap}>
               <Text style={styles.infoTitleBlue}>Secure &amp; Protected</Text>
@@ -151,18 +147,18 @@ export function LoginScreen({ navigation }: Props) {
 
           <View style={styles.infoCardYellow}>
             <View style={styles.infoIconYellow}>
-              <Ionicons name="sparkles-outline" size={14} color="#F39200" />
+              <Image source={require('../assets/developed.png')} style={{width: 30, height: 30, marginTop:10}} />
             </View>
             <View style={styles.infoTextWrap}>
-              <Text style={styles.infoTitleYellow}>Trusted by Thousands</Text>
+              <Text style={styles.infoTitleYellow}>Official app of Bhima Jewellery</Text>
               <Text style={styles.infoBodyYellow}>
-                Join India&apos;s leading gold investment community
+              Developed and managed by Smacon Technologies Pvt Ltd
               </Text>
             </View>
           </View>
 
           <Text style={styles.termsText}>
-            By continuing, you agree to our <Text style={styles.termsAccent}>Term</Text> and{' '}
+            By continuing, you agree to our <Text style={styles.termsAccent}>Terms</Text> and{' '}
             <Text style={styles.termsAccent}>Privacy Policy</Text>
           </Text>
           
@@ -192,7 +188,7 @@ const styles = StyleSheet.create({
   },
   brandLogo: {
     width: 248,
-    height: 64,
+    height: 100,
   },
   brandCaption: {
     marginTop: 8,
@@ -202,7 +198,7 @@ const styles = StyleSheet.create({
     letterSpacing: 1.7,
   },
   title: {
-    marginTop: 56,
+    marginTop: 30,
     textAlign: 'center',
     fontSize: 28,
     color: '#12192D',
@@ -345,7 +341,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'flex-start',
     gap: 8,
-    marginTop: 20,
+    marginTop: 15,
   },
   infoIconYellow: {
     width: 20,
@@ -383,14 +379,14 @@ const styles = StyleSheet.create({
     fontFamily: 'Poppins-Medium',
   },
   termsText: {
-    marginTop: 14,
+    marginTop: 10,
     textAlign: 'center',
     color: '#9CA3AF',
     fontSize: 10,
     fontFamily: 'Poppins-Medium',
   },
   guestText: {
-    marginTop: 16,
+    marginTop: 5,
     textAlign: 'center',
     color: '#9CA3AF',
     fontSize: 10,
@@ -399,6 +395,6 @@ const styles = StyleSheet.create({
   },
   termsAccent: {
     color: '#F39200',
-    fontWeight: '700',
+    fontFamily: 'Poppins-Bold',
   },
 });

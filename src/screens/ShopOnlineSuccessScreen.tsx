@@ -10,6 +10,7 @@ import {
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import Ionicons from 'react-native-vector-icons/Ionicons';
 import type { RootStackParamList } from '../navigation/types';
+import { BottomTabs } from '../components/BottomTabs';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'ShopOnlineSuccess'>;
 
@@ -17,6 +18,7 @@ export function ShopOnlineSuccessScreen({ navigation }: Props) {
   return (
     <SafeAreaView style={styles.safeArea}>
       <StatusBar barStyle="dark-content" backgroundColor="#F5F5F3" />
+      <View style={styles.screenBody}>
       <View style={styles.container}>
         <View style={styles.successIcon}>
           <Ionicons name="checkmark" size={24} color="#FFFFFF" />
@@ -31,12 +33,15 @@ export function ShopOnlineSuccessScreen({ navigation }: Props) {
           <Text style={styles.ctaText}>BACK TO PORTFOLIO</Text>
         </Pressable>
       </View>
+      <BottomTabs navigation={navigation} activeTab="mySchemes" />
+      </View>
     </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
   safeArea: { flex: 1, backgroundColor: '#F5F5F3' },
+  screenBody: { flex: 1 },
   container: {
     flex: 1,
     justifyContent: 'center',

@@ -1,4 +1,4 @@
-const BASE_URL = 'https://pureapp.bhimajewellery.com/api';
+const BASE_URL = 'http://bhimaadmin.smacononline.com/api';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -13,8 +13,8 @@ export interface SchemeTypeItem {
 }
 
 export interface SchemeEntry {
-  id: number;
-  scheme_type: number;
+  id?: number;
+  scheme_type?: number;
   min_amount: string;
   duration: number;
 }
@@ -28,6 +28,11 @@ export interface SchemeTypeDetail {
   popular_scheme: number | null;
   min_amount: string | null;
   max_amount: string | null;
+  multiple_of?: number | null;
+  scheme_code?: number | null;
+  allow_custom_amount_to_enter?: boolean;
+  calculation_type?: 'amount' | 'weight' | null;
+  gold_rate?: string | null;
   scheme?: SchemeEntry[];
   schemes: SchemeEntry[];
   /** May also arrive at response root; merged in `loadSchemeType`. */
@@ -50,31 +55,49 @@ export interface SchemeTypesResponse {
   schemetype: SchemeTypeItem[];
 }
 
+export interface SchemeAttribute {
+  field_name: string;
+  field_value: string;
+}
+
 export interface SchemesByTypeResponse {
   success: boolean;
   message: string;
   schemetype: SchemeTypeDetail;
+  attributes?: SchemeAttribute[];
   projected_maturity?: ProjectedMaturity | null;
 }
 
 // ─── API calls ────────────────────────────────────────────────────────────────
 
-export async function fetchSchemeTypes(): Promise<SchemeTypesResponse> {
+function buildHeaders(token?: string | null): Record<string, string> {
+  const headers: Record<string, string> = {
+    'Content-Type': 'application/json',
+    Accept: 'application/json',
+  };
+  if (token) {
+    headers.Authorization = `Bearer ${token}`;
+  }
+  return headers;
+}
+
+export async function fetchSchemeTypes(token?: string | null): Promise<SchemeTypesResponse> {
   const response = await fetch(`${BASE_URL}/schemetypes`, {
     method: 'GET',
-    headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+    headers: buildHeaders(token),
   });
   return response.json();
 }
 
 export async function fetchSchemesByType(
   schemeTypeId: number,
+  token?: string | null,
 ): Promise<SchemesByTypeResponse> {
   const response = await fetch(
     `${BASE_URL}/schemes/by-scheme-type/${schemeTypeId}`,
     {
       method: 'GET',
-      headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+      headers: buildHeaders(token),
     },
   );
   return response.json();
@@ -97,6 +120,30 @@ export interface SchemeMaturityResponse {
 export async function fetchSchemeMaturity(
   schemeId: number,
 ): Promise<SchemeMaturityResponse> {
+  const response = await fetch(`${BASE_URL}/schemes/${schemeId}`, {
+    method: 'GET',
+    headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+  });
+  return response.json();
+}
+
+// ─── Fetch maturity by scheme ID ────────────────────────────────────────────────
+
+export interface MaturityByAmountResponse {
+  success: boolean;
+  message?: string;
+  monthly_amount?: string;
+  duration?: number;
+  bonus?: string | number;
+  total_without_bonus?: number;
+  total_maturity_amount?: number | string;
+  estimated_gold?: number | null;
+  weight_in?: string | null;
+}
+
+export async function fetchMaturityByAmount(
+  schemeId: number,
+): Promise<MaturityByAmountResponse> {
   const response = await fetch(`${BASE_URL}/schemes/${schemeId}`, {
     method: 'GET',
     headers: { 'Content-Type': 'application/json', Accept: 'application/json' },

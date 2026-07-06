@@ -1,6 +1,6 @@
 import { authFetch } from './apiClient';
 
-const BASE_URL = 'https://pureapp.bhimajewellery.com/api';
+const BASE_URL = 'http://bhimaadmin.smacononline.com/api';
 
 // ─── Shared header helpers ────────────────────────────────────────────────────
 
@@ -29,17 +29,30 @@ export interface SchemeTimelineEntry {
 export interface SchemePopupDetail {
   id: number;
   name: string;
+  scheme_amount?: number | null;
+  variable_installment_allow?: boolean;
+  min_amount?: string | null;
+  max_amount?: string | null;
+  multiple_of?: string | null;
   bonus_value: string;
   paid_count: number;
   total_installments: number;
   timeline: SchemeTimelineEntry[];
+  join_date?: string | null;
+  maturity_date?: string | null;
+  nominee_name?: string | null;
+  nominee_relation?: string | null;
 }
 
 export interface SchemeNextPayment {
-  due_date: string;
+  due_date?: string | null;
+  date?: string | null;
   label: string;
-  days: number;
+  days?: number;
   status: string;
+  text?: string | null;
+  is_paid?: boolean;
+  paid_on?: string | null;
 }
 
 export interface SchemePopupMetrics {
@@ -53,12 +66,17 @@ export interface SchemePopupResponse {
   scheme: SchemePopupDetail;
   next_payment: SchemeNextPayment;
   metrics: SchemePopupMetrics;
+  join_date: string | null;
+  maturity_date: string | null;
+  nominee_name: string | null;
+  nominee_relation: string | null;
 }
 
 export async function fetchSchemePopupDetails(
   token: string,
   id: number,
 ): Promise<SchemePopupResponse> {
+  console.log("fetchSchemePopupDetails", `${BASE_URL}/myportfolio/${id}/details`)
   return authFetch<SchemePopupResponse>(`${BASE_URL}/myportfolio/${id}/details`, {
     method: 'GET',
     headers: authHeaders(token),
@@ -102,9 +120,7 @@ export interface CustomerProfile {
     preferred_branch: string | null;
     preferred_branch_code?: string | null;
   };
-  language_preference: {
-    app_language: string;
-  };
+  language_preference: string; // "en" for English, "ta" for Tamil
 }
 
 export interface ProfileResponse {
@@ -225,6 +241,7 @@ export interface CustomerPayload {
   adharNo: string;
   reqFromMobApp?: boolean;
   customerCode?: string; // present → update, absent → create
+  language_preference?: string; // "en" for English, "ta" for Tamil
 }
 
 export interface CustomerMutationResponse {
@@ -257,5 +274,23 @@ export async function updateProfile(
     method: 'POST',
     headers: authHeaders(token),
     body: JSON.stringify(payload),
+  });
+}
+
+// ─── Update language preference (/api/update-language) ────────────────────────
+
+export interface UpdateLanguageResponse {
+  success: boolean;
+  message: string;
+}
+
+export async function updateLanguagePreference(
+  token: string,
+  language_preference: string,
+): Promise<UpdateLanguageResponse> {
+  return authFetch<UpdateLanguageResponse>(`${BASE_URL}/update-language`, {
+    method: 'POST',
+    headers: authHeaders(token),
+    body: JSON.stringify({ language_preference }),
   });
 }

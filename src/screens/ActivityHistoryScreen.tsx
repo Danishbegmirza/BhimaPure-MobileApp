@@ -16,6 +16,8 @@ import type { RootStackParamList } from '../navigation/types';
 import { fetchPaymentHistory, type PaymentInstallment } from '../api/user';
 import { getToken } from '../storage/auth';
 import { goBackOrDashboard } from '../navigation/backNavigation';
+import { BottomTabs } from '../components/BottomTabs';
+import { useSafeBottomInset } from '../utils/safeBottomInset';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'ActivityHistory'>;
 type Filter = 'all' | 'installments';
@@ -80,6 +82,7 @@ function PaymentCard({ item }: { item: PaymentInstallment }) {
 // ─── Main Screen ──────────────────────────────────────────────────────────────
 
 export function ActivityHistoryScreen({ navigation }: Props) {
+  const safeBottom = useSafeBottomInset();
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [installments, setInstallments] = useState<PaymentInstallment[]>([]);
@@ -93,8 +96,10 @@ export function ActivityHistoryScreen({ navigation }: Props) {
       setLoading(true);
       setError(null);
       const token = await getToken();
+      console.log('token', token);
       if (!token) { setError('Please log in.'); return; }
       const result = await fetchPaymentHistory(token);
+      console.log('result', result);
       if (result.success) {
         setInstallments(result.installments ?? []);
         setTotalInstallment(result.total_installment ?? '0');
@@ -131,7 +136,8 @@ export function ActivityHistoryScreen({ navigation }: Props) {
   return (
     <SafeAreaView style={styles.safeArea}>
       <StatusBar barStyle="dark-content" backgroundColor="#F5F5F3" />
-      <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
+      <View style={styles.screenBody}>
+      <ScrollView contentContainerStyle={[styles.content, { paddingBottom: 100 + safeBottom }]} showsVerticalScrollIndicator={false}>
 
         {/* Header */}
         <View style={styles.header}>
@@ -215,12 +221,15 @@ export function ActivityHistoryScreen({ navigation }: Props) {
           })
         )}
       </ScrollView>
+      <BottomTabs navigation={navigation} activeTab="activity" />
+      </View>
     </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
   safeArea: { flex: 1, backgroundColor: '#F5F5F3' },
+  screenBody: { flex: 1 },
   content: { paddingHorizontal: 12, paddingTop: 8, paddingBottom: 24, gap: 10, marginTop: 10 },
   header: {
     flexDirection: 'row',

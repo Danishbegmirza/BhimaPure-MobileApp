@@ -26,6 +26,7 @@ import { getToken } from '../storage/auth';
 import { UnauthenticatedError } from '../api/apiClient';
 import { goBackOrDashboard } from '../navigation/backNavigation';
 import { useSafeBottomInset } from '../utils/safeBottomInset';
+import { BottomTabs } from '../components/BottomTabs';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'JoinScheme'>;
 
@@ -136,7 +137,7 @@ export function JoinSchemeScreen({ navigation, route }: Props) {
           keyboardVerticalOffset={Platform.OS === 'ios' ? 20 : 0}
         >
           <ScrollView
-            contentContainerStyle={[styles.content, { paddingBottom: 140 + safeBottom }]}
+            contentContainerStyle={[styles.content, { paddingBottom: 220 + safeBottom }]}
             showsVerticalScrollIndicator={false}
             keyboardShouldPersistTaps="handled"
           >
@@ -235,7 +236,7 @@ export function JoinSchemeScreen({ navigation, route }: Props) {
           </ScrollView>
         </KeyboardAvoidingView>
 
-        <View style={[styles.bottomArea, { paddingBottom: 16 + safeBottom }]}>
+        <View style={[styles.bottomArea, { bottom: 70 + safeBottom }]}>
         {/* <Pressable style={styles.secondaryButton} disabled>
           <Text style={styles.secondaryButtonText}>COMPLETE ALL FIELDS</Text>
           <Ionicons name="arrow-forward" size={14} color="#9CA3AF" />
@@ -262,6 +263,7 @@ export function JoinSchemeScreen({ navigation, route }: Props) {
           </LinearGradient>
         </Pressable>
         </View>
+        <BottomTabs navigation={navigation} activeTab="joinNew" />
       </View>
     </SafeAreaView>
   );

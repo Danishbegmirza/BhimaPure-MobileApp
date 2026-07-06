@@ -85,6 +85,8 @@ export function CompleteProfileScreen({ navigation }: Props) {
   const [anniversary, setAnniversary] = useState('');
   const [activeDateField, setActiveDateField] = useState<'dob' | 'anniversary' | null>(null);
   const [showDatePicker, setShowDatePicker] = useState(false);
+  const [languagePreference, setLanguagePreference] = useState<'en' | 'ta'>('en');
+  const [languageDropdownOpen, setLanguageDropdownOpen] = useState(false);
 
   // Step 1 – Address & Branch
   const [street, setStreet] = useState('');
@@ -212,14 +214,19 @@ export function CompleteProfileScreen({ navigation }: Props) {
         bankName,
         accountNo: accountNumber,
         ifsc,
-        reqFromMobApp:true    
+        reqFromMobApp: true,
+        language_preference: languagePreference, // "en" or "ta"
       });
       console.log('result',result);
 
       if (result.success && result.token) {
         await saveToken(result.token);
         await clearPendingMobile();
-        navigation.replace('Dashboard');
+        // Navigate to dashboard and clear the entire navigation stack
+        navigation.reset({
+          index: 0,
+          routes: [{ name: 'Dashboard' }],
+        });
       } else if (result.success && result.code === 'SAP_PENDING') {
         await clearPendingMobile();
         Alert.alert(
@@ -247,7 +254,7 @@ export function CompleteProfileScreen({ navigation }: Props) {
   }, [
     fullName, mobileNumber, email, dob, anniversary, street, address2, area,
     city, pincode, stateValue, selectedBranchCode, pan, aadhaar, bankName,
-    accountNumber, ifsc, navigation,
+    accountNumber, ifsc, languagePreference, navigation,
   ]);
 
   const validateStep = useCallback((currentStep: number): boolean => {
@@ -380,6 +387,74 @@ export function CompleteProfileScreen({ navigation }: Props) {
                 placeholder="DD/MM/YYYY"
                 onPress={() => openDatePicker('anniversary')}
               />
+
+              {/* Language Preference Dropdown */}
+              <View style={{marginTop: 15}}></View>
+              <Text style={styles.fieldLabel}>
+                PREFERRED LANGUAGE
+              </Text>
+              <Pressable
+                style={styles.dropdownRow}
+                onPress={() => setLanguageDropdownOpen(prev => !prev)}
+              >
+                <Ionicons name="language-outline" size={14} color="#9CA3AF" />
+                <Text style={styles.dropdownText}>
+                  {languagePreference === 'en' ? 'English' : 'தமிழ் (Tamil)'}
+                </Text>
+                <Ionicons
+                  name={languageDropdownOpen ? 'chevron-up-outline' : 'chevron-down-outline'}
+                  size={14}
+                  color="#9CA3AF"
+                />
+              </Pressable>
+              {languageDropdownOpen && (
+                <View style={styles.dropdownList}>
+                  <Pressable
+                    style={[
+                      styles.dropdownItem,
+                      languagePreference === 'en' && styles.dropdownItemActive,
+                    ]}
+                    onPress={() => {
+                      setLanguagePreference('en');
+                      setLanguageDropdownOpen(false);
+                    }}
+                  >
+                    <Text
+                      style={[
+                        styles.dropdownItemText,
+                        languagePreference === 'en' && styles.dropdownItemTextActive,
+                      ]}
+                    >
+                      English
+                    </Text>
+                    {languagePreference === 'en' && (
+                      <Ionicons name="checkmark" size={14} color="#F06F00" />
+                    )}
+                  </Pressable>
+                  <Pressable
+                    style={[
+                      styles.dropdownItem,
+                      languagePreference === 'ta' && styles.dropdownItemActive,
+                    ]}
+                    onPress={() => {
+                      setLanguagePreference('ta');
+                      setLanguageDropdownOpen(false);
+                    }}
+                  >
+                    <Text
+                      style={[
+                        styles.dropdownItemText,
+                        languagePreference === 'ta' && styles.dropdownItemTextActive,
+                      ]}
+                    >
+                      தமிழ் (Tamil)
+                    </Text>
+                    {languagePreference === 'ta' && (
+                      <Ionicons name="checkmark" size={14} color="#F06F00" />
+                    )}
+                  </Pressable>
+                </View>
+              )}
             </View>
           )}
 
@@ -524,7 +599,7 @@ export function CompleteProfileScreen({ navigation }: Props) {
                     setFormErrors(prev => ({ ...prev, branch: '' }));
                   }}
                   icon="business-outline"
-                  placeholder="Enter branch code"
+                  placeholder="Select branch"
                   error={formErrors.branch}
                 />
               )}

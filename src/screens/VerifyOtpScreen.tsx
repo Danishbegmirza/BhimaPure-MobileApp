@@ -3,6 +3,7 @@ import {
   ActivityIndicator,
   Alert,
   Image,
+  Platform,
   Pressable,
   SafeAreaView,
   StatusBar,
@@ -15,10 +16,11 @@ import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import Ionicons from 'react-native-vector-icons/Ionicons';
 import type { RootStackParamList } from '../navigation/types';
 import LinearGradient from 'react-native-linear-gradient';
-import { verifyOTP, isVerifyOtpSuccess, isValidationError, isNewUser } from '../api/auth';
+import { verifyOTP, isVerifyOtpSuccess, isValidationError, isNewUser, isAcmeCheckPending } from '../api/auth';
 import { saveToken, saveCustomer, savePendingMobile } from '../storage/auth';
 import { goBackOrDashboard } from '../navigation/backNavigation';
 import { useSafeBottomInset } from '../utils/safeBottomInset';
+import { getFCMToken } from '../services/notifications';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'VerifyOtp'>;
 
@@ -69,7 +71,10 @@ export function VerifyOtpScreen({ navigation, route }: Props) {
     setErrorMsg('');
 
     try {
-      const response = await verifyOTP(phoneNumber, otp);
+      const deviceToken = await getFCMToken();
+      console.log('deviceToken', deviceToken);
+      const platform = Platform.OS === 'android' ? 'android' : 'ios';
+      const response = await verifyOTP(phoneNumber, otp, deviceToken, platform);
       console.log('response', response);
 
       if (isValidationError(response)) {
@@ -77,6 +82,15 @@ export function VerifyOtpScreen({ navigation, route }: Props) {
         const mobileErrors = response.errors.mobile;
         const firstError = otpErrors?.[0] ?? mobileErrors?.[0] ?? response.message;
         setErrorMsg(firstError);
+        return;
+      }
+
+      if (isAcmeCheckPending(response)) {
+        Alert.alert(
+          'System Maintenance',
+          response.message,
+          [{ text: 'OK', onPress: () => navigation.goBack() }]
+        );
         return;
       }
 
@@ -92,8 +106,11 @@ export function VerifyOtpScreen({ navigation, route }: Props) {
         await saveToken(response.token);
         await saveCustomer(response.customer);
 
-        // Navigate to dashboard
-        navigation.replace('Dashboard');
+        // Navigate to dashboard and clear the entire navigation stack
+        navigation.reset({
+          index: 0,
+          routes: [{ name: 'Dashboard' }],
+        });
       }
     } catch (error) {
       setErrorMsg('Something went wrong. Please try again.');

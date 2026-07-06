@@ -1,5 +1,6 @@
+const BASE_URL = 'http://bhimaadmin.smacononline.com/api/auth';
 //const BASE_URL = 'http://bhimaadmin.smacononline.com/api/auth';
-const BASE_URL = 'https://pureapp.bhimajewellery.com/api/auth';
+//http://bhimaadmin.smacononline.com/api/auth
 
 export interface RequestOtpSuccess {
   message: string;
@@ -42,7 +43,14 @@ export interface VerifyOtpInvalidMobile {
   action: 'register';
 }
 
-export type VerifyOtpResponse = VerifyOtpSuccess | VerifyOtpInvalidMobile | ValidationError;
+export interface VerifyOtpAcmePending {
+  success: boolean;
+  message: string;
+  customer_state: 'acme_check_pending';
+  action: 'guest';
+}
+
+export type VerifyOtpResponse = VerifyOtpSuccess | VerifyOtpInvalidMobile | VerifyOtpAcmePending | ValidationError;
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -62,6 +70,10 @@ export function isNewUser(res: RequestOtpResponse | VerifyOtpResponse): res is R
   return (res as RequestOtpNewUser).action === 'register';
 }
 
+export function isAcmeCheckPending(res: VerifyOtpResponse): res is VerifyOtpAcmePending {
+  return (res as VerifyOtpAcmePending).customer_state === 'acme_check_pending';
+}
+
 // ─── API calls ────────────────────────────────────────────────────────────────
 
 export async function requestOTP(mobile: string): Promise<RequestOtpResponse> {
@@ -78,15 +90,31 @@ export async function requestOTP(mobile: string): Promise<RequestOtpResponse> {
   return data;
 }
 
-export async function verifyOTP(mobile: string, otp: string): Promise<VerifyOtpResponse> {
+export async function verifyOTP(
+  mobile: string,
+  otp: string,
+  device_token?: string | null,
+  platform?: string
+): Promise<VerifyOtpResponse> {
   const response = await fetch(`${BASE_URL}/verify-otp`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
       Accept: 'application/json',
     },
-    body: JSON.stringify({ mobile, otp }),
+    body: JSON.stringify({
+      mobile,
+      otp,
+      device_token: device_token ?? '',
+      platform: platform ?? '',
+    }),
   });
+  console.log('verifyOTP payload', JSON.stringify({
+    mobile,
+    otp,
+    device_token: device_token ?? '',
+    platform: platform ?? '',
+  }));
 
   const data: VerifyOtpResponse = await response.json();
   return data;

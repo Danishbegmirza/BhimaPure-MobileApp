@@ -23,6 +23,7 @@ import { UnauthenticatedError } from '../api/apiClient';
 import type { RootStackParamList } from '../navigation/types';
 import { goBackOrDashboard } from '../navigation/backNavigation';
 import { useSafeBottomInset } from '../utils/safeBottomInset';
+import { BottomTabs } from '../components/BottomTabs';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'GoldRedemption'>;
 
@@ -112,8 +113,11 @@ export function GoldRedemptionScreen({ navigation, route }: Props) {
     return (
       <SafeAreaView style={styles.safeArea}>
         <StatusBar barStyle="dark-content" backgroundColor="#F5F5F3" />
+        <View style={styles.screenBody}>
         <View style={styles.loadingWrap}>
           <ActivityIndicator size="large" color="#F59E0B" />
+        </View>
+        <BottomTabs navigation={navigation} activeTab="mySchemes" />
         </View>
       </SafeAreaView>
     );
@@ -122,8 +126,9 @@ export function GoldRedemptionScreen({ navigation, route }: Props) {
   return (
     <SafeAreaView style={styles.safeArea}>
       <StatusBar barStyle="dark-content" backgroundColor="#F5F5F3" />
+      <View style={styles.screenBody}>
       <ScrollView
-        contentContainerStyle={[styles.content, { paddingBottom: 116 + safeBottom }]}
+        contentContainerStyle={[styles.content, { paddingBottom: 190 + safeBottom }]}
         showsVerticalScrollIndicator={false}
       >
         <View style={styles.header}>
@@ -249,7 +254,7 @@ export function GoldRedemptionScreen({ navigation, route }: Props) {
         </View>
       </ScrollView>
 
-      <View style={[styles.bottomCtaWrap, { paddingBottom: 14 + safeBottom }]}>
+      <View style={[styles.bottomCtaWrap, { bottom: 70 + safeBottom }]}>
         <Pressable
           style={[styles.bottomCta, submitting && styles.bottomCtaDisabled]}
           disabled={submitting}
@@ -271,12 +276,15 @@ export function GoldRedemptionScreen({ navigation, route }: Props) {
           )}
         </Pressable>
       </View>
+      <BottomTabs navigation={navigation} activeTab="mySchemes" />
+      </View>
     </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
   safeArea: { flex: 1, backgroundColor: '#F5F5F3' },
+  screenBody: { flex: 1 },
   loadingWrap: { flex: 1, justifyContent: 'center', alignItems: 'center' },
   content: { paddingHorizontal: 14, paddingTop: 8, gap: 11 },
   header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingTop: 22 },

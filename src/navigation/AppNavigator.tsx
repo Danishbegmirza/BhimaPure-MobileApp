@@ -19,6 +19,7 @@ import { PaymentMethodScreen } from '../screens/PaymentMethodScreen';
 import { PaymentSuccessScreen } from '../screens/PaymentSuccessScreen';
 import { ShopOnlineSuccessScreen } from '../screens/ShopOnlineSuccessScreen';
 import { NotificationsScreen } from '../screens/NotificationsScreen';
+import { NotificationDetailScreen } from '../screens/NotificationDetailScreen';
 import { ActivityHistoryScreen } from '../screens/ActivityHistoryScreen';
 import { ProfileScreen } from '../screens/ProfileScreen';
 import { EditProfileScreen } from '../screens/EditProfileScreen';
@@ -48,6 +49,7 @@ export function AppNavigator() {
       <Stack.Screen name="PaymentMethod" component={PaymentMethodScreen} />
       <Stack.Screen name="PaymentSuccess" component={PaymentSuccessScreen} />
       <Stack.Screen name="Notifications" component={NotificationsScreen} />
+      <Stack.Screen name="NotificationDetail" component={NotificationDetailScreen} />
       <Stack.Screen name="ActivityHistory" component={ActivityHistoryScreen} />
       <Stack.Screen name="Profile" component={ProfileScreen} />
       <Stack.Screen name="EditProfile" component={EditProfileScreen} />

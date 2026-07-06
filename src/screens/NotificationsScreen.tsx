@@ -20,6 +20,8 @@ import {
 } from '../api/user';
 import { getToken } from '../storage/auth';
 import { goBackOrDashboard } from '../navigation/backNavigation';
+import { BottomTabs } from '../components/BottomTabs';
+import { useSafeBottomInset } from '../utils/safeBottomInset';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'Notifications'>;
 
@@ -110,6 +112,7 @@ function NotificationCard({ item }: { item: ApiNotification }) {
 // ─── Main Screen ──────────────────────────────────────────────────────────────
 
 export function NotificationsScreen({ navigation }: Props) {
+  const safeBottom = useSafeBottomInset();
   const [loading, setLoading] = useState(true);
   const [markingRead, setMarkingRead] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -161,8 +164,9 @@ export function NotificationsScreen({ navigation }: Props) {
   return (
     <SafeAreaView style={styles.safeArea}>
       <StatusBar barStyle="dark-content" backgroundColor="#F4F4F2" />
+      <View style={styles.screenBody}>
       <ScrollView
-        contentContainerStyle={styles.content}
+        contentContainerStyle={[styles.content, { paddingBottom: 100 + safeBottom }]}
         showsVerticalScrollIndicator={false}
       >
         {/* Header */}
@@ -243,12 +247,15 @@ export function NotificationsScreen({ navigation }: Props) {
           </>
         )}
       </ScrollView>
+      <BottomTabs navigation={navigation} />
+      </View>
     </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
   safeArea: { flex: 1, backgroundColor: '#F5F5F3' },
+  screenBody: { flex: 1 },
   content: { flexGrow: 1, paddingHorizontal: 10, paddingTop: 8, paddingBottom: 24, gap: 10, marginTop: 30 },
   header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   iconBtn: { width: 30, height: 30, justifyContent: 'center', alignItems: 'center' },

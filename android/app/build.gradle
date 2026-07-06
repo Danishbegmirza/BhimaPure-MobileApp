@@ -1,6 +1,7 @@
 apply plugin: "com.android.application"
 apply plugin: "org.jetbrains.kotlin.android"
 apply plugin: "com.facebook.react"
+apply plugin: "com.google.gms.google-services"
 
 project.ext.vectoricons = [
     iconFontNames: ['Ionicons.ttf']
@@ -14,7 +15,9 @@ apply from: file("../../node_modules/react-native-vector-icons/fonts.gradle")
 react {
     // Ensure Array#toReversed exists before Metro loads: RN CLI calls getDefaultConfig() before metro.config.js runs.
     def metroPolyfill = file("../../scripts/metro-polyfill.cjs")
-    nodeExecutableAndArgs = ["node", "--require", metroPolyfill.absolutePath]
+    // Use Node 20+ for React Native 0.84 compatibility (AbortController, toReversed, etc.)
+    def nodePath = "/home/link-lap-12/.nvm/versions/node/v20.8.0/bin/node"
+    nodeExecutableAndArgs = [nodePath, "--require", metroPolyfill.absolutePath]
 
     /* Folders */
     //   The root of your project, i.e. where "package.json" lives. Default is '../..'
@@ -91,8 +94,8 @@ android {
         applicationId "com.bhima.pure"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
-        versionCode 2
-        versionName "1.1"
+        versionCode 8
+        versionName "1.7"
     }
     signingConfigs {
         debug {

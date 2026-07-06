@@ -1,6 +1,6 @@
 import { authFetch } from './apiClient';
 
-const BASE_URL = 'https://pureapp.bhimajewellery.com/api';
+const BASE_URL = 'http://bhimaadmin.smacononline.com/api';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -22,17 +22,34 @@ export interface PortfolioNextPayment {
   paid_on: string | null;
 }
 
+export interface PortfolioSchemeInfo {
+  id: number;
+  name: string;
+  min_amount?: string | null;
+  max_amount?: string | null;
+  multiple_of?: number | null;
+}
+
 export interface PortfolioScheme {
   id: number;
   order_no: string;
   status: string; // 'ACTIVE' | 'MATURED' | 'REDEEMED'
-  scheme: {
-    id: number;
-    name: string;
-  };
+  scheme_amount?: number | null;
+  variable_installment_allow?: boolean;
+  scheme: PortfolioSchemeInfo;
+  join_date?: string | null;
   maturity_date: string;
+  nominee_name?: string | null;
+  nominee_relation?: string | null;
   metrics: PortfolioSchemeMetrics;
   next_payment: PortfolioNextPayment;
+  payment_history?: Array<{
+    installment_amount: string;
+    installment_date: string;
+    status_message: string;
+    transaction_id: string | null;
+    source: string;
+  }>;
 }
 
 export interface PortfolioCounts {

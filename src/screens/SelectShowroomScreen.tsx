@@ -19,6 +19,7 @@ import { getToken } from '../storage/auth';
 import { UnauthenticatedError } from '../api/apiClient';
 import { goBackOrDashboard } from '../navigation/backNavigation';
 import { useSafeBottomInset } from '../utils/safeBottomInset';
+import { BottomTabs } from '../components/BottomTabs';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'SelectShowroom'>;
 
@@ -100,8 +101,9 @@ export function SelectShowroomScreen({ navigation, route }: Props) {
   return (
     <SafeAreaView style={styles.safeArea}>
       <StatusBar barStyle="dark-content" backgroundColor="#F5F5F3" />
+      <View style={styles.screenBody}>
       <ScrollView
-        contentContainerStyle={[styles.content, { paddingBottom: 106 + safeBottom }]}
+        contentContainerStyle={[styles.content, { paddingBottom: 180 + safeBottom }]}
         showsVerticalScrollIndicator={false}
       >
         <View style={styles.header}>
@@ -161,7 +163,7 @@ export function SelectShowroomScreen({ navigation, route }: Props) {
         )}
       </ScrollView>
 
-      <View style={[styles.bottomCtaWrap, { paddingBottom: 14 + safeBottom }]}>
+      <View style={[styles.bottomCtaWrap, { bottom: 70 + safeBottom }]}>
         <Pressable
           style={[
             styles.bottomCta,
@@ -180,12 +182,15 @@ export function SelectShowroomScreen({ navigation, route }: Props) {
           )}
         </Pressable>
       </View>
+      <BottomTabs navigation={navigation} activeTab="mySchemes" />
+      </View>
     </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
   safeArea: { flex: 1, backgroundColor: '#F5F5F3' },
+  screenBody: { flex: 1 },
   content: { paddingHorizontal: 14, paddingTop: 8 },
   header: {
     flexDirection: 'row',

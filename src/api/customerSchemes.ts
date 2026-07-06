@@ -1,6 +1,6 @@
 import { authFetch } from './apiClient';
 
-const BASE_URL = 'https://pureapp.bhimajewellery.com/api';
+const BASE_URL = 'http://bhimaadmin.smacononline.com/api';
 
 function authHeaders(token: string) {
   return {
@@ -19,7 +19,24 @@ export interface InitiateSchemeResponse {
   status?: string;
 }
 
+export interface InitiateSchemePayload {
+  scheme_code: number;
+  amount: number;
+}
+
 export async function initiateSchemeEnrollment(
+  token: string,
+  payload: InitiateSchemePayload,
+): Promise<InitiateSchemeResponse> {
+  return authFetch<InitiateSchemeResponse>(`${BASE_URL}/customer-schemes/initiate`, {
+    method: 'POST',
+    headers: authHeaders(token),
+    body: JSON.stringify(payload),
+  });
+}
+
+/** @deprecated Use initiateSchemeEnrollment with scheme_code and amount instead */
+export async function initiateSchemeEnrollmentLegacy(
   token: string,
   schemeId: number,
 ): Promise<InitiateSchemeResponse> {

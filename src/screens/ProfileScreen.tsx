@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import {
   ActivityIndicator,
+  Linking,
   Pressable,
   SafeAreaView,
   ScrollView,
@@ -16,6 +17,7 @@ import type { RootStackParamList } from '../navigation/types';
 import { fetchProfile, type CustomerProfile } from '../api/user';
 import { clearAuthData, getToken } from '../storage/auth';
 import { useSafeBottomInset } from '../utils/safeBottomInset';
+import { BottomTabs } from '../components/BottomTabs';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'Profile'>;
 
@@ -27,6 +29,7 @@ function getIconPalette(icon: string) {
   if (icon === 'location-outline') { return { color: '#EF4444', bg: '#FFEDEE' }; }
   if (icon === 'business-outline') { return { color: '#F59E0B', bg: '#FFF4DF' }; }
   if (icon === 'card-outline') { return { color: '#64748B', bg: '#EEF2FF' }; }
+  if (icon === 'language-outline') { return { color: '#059669', bg: '#E9FAEF' }; }
   return { color: '#64748B', bg: '#EEF2FF' };
 }
 
@@ -67,6 +70,7 @@ export function ProfileScreen({ navigation }: Props) {
         return;
       }
       const result = await fetchProfile(token);
+      console.log("profile api response",result);
       if (result.success) {
         setProfile(result.data);
       } else {
@@ -90,8 +94,9 @@ export function ProfileScreen({ navigation }: Props) {
   return (
     <SafeAreaView style={styles.safeArea}>
       <StatusBar barStyle="dark-content" backgroundColor="#F5F5F3" />
+      <View style={styles.screenBody}>
       <ScrollView
-        contentContainerStyle={[styles.content, { paddingBottom: 140 + safeBottom }]}
+        contentContainerStyle={[styles.content, { paddingBottom: 220 + safeBottom }]}
         showsVerticalScrollIndicator={false}
       >
         <View style={styles.header}>
@@ -174,51 +179,19 @@ export function ProfileScreen({ navigation }: Props) {
             />
 
             <SectionTitle title="LANGUAGE PREFERENCE" />
-            <View style={styles.languageCard}>
-              <View style={styles.langHeader}>
-                <View style={styles.infoIcon}>
-                  <Ionicons name="language-outline" size={14} color="#059669" />
-                </View>
-                <View>
-                  <Text style={styles.infoLabel}>APP LANGUAGE</Text>
-                  <Text style={styles.langHint}>Choose your preferred language</Text>
-                </View>
-              </View>
-              <View style={styles.langButtons}>
-                <Pressable
-                  style={[
-                    styles.langBtn,
-                    profile.language_preference.app_language === 'English' && styles.langBtnActive,
-                  ]}
-                >
-                  <Text
-                    style={
-                      profile.language_preference.app_language === 'English'
-                        ? styles.langBtnTextActive
-                        : styles.langBtnText
-                    }
-                  >
-                    English
-                  </Text>
-                </Pressable>
-                <Pressable
-                  style={[
-                    styles.langBtn,
-                    profile.language_preference.app_language !== 'English' && styles.langBtnActive,
-                  ]}
-                >
-                  <Text
-                    style={
-                      profile.language_preference.app_language !== 'English'
-                        ? styles.langBtnTextActive
-                        : styles.langBtnText
-                    }
-                  >
-                    தமிழ்
-                  </Text>
-                </Pressable>
-              </View>
-            </View>
+            <InfoCard
+              icon="language-outline"
+              label="APP LANGUAGE"
+              value={(() => {
+                let lang = 'en';
+                if (typeof profile.language_preference === 'string') {
+                  lang = profile.language_preference;
+                } else if (profile.language_preference && typeof profile.language_preference === 'object') {
+                  lang = (profile.language_preference as { app_language?: string }).app_language ?? 'en';
+                }
+                return lang === 'en' || lang === 'English' ? 'English' : 'தமிழ் (Tamil)';
+              })()}
+            />
 
             <SectionTitle title="KYC DETAILS" />
             <InfoCard
@@ -245,12 +218,18 @@ export function ProfileScreen({ navigation }: Props) {
             />
             <InfoCard icon="card-outline" label="IFSC CODE" value={profile.bank_details.ifsc} />
             <View style={{marginBottom:20}}></View>
+            <Pressable
+              style={styles.deleteAccountLink}
+              onPress={() => Linking.openURL('https://pureapp.bhimajewellery.com/account-deletion')}
+            >
+              <Text style={styles.deleteAccountText}>Delete Account</Text>
+            </Pressable>
           </>
         ) : null}
       </ScrollView>
 
       {isLoggedIn ? (
-        <View style={[styles.bottomCtaWrap, { paddingBottom: 12 + safeBottom }]}>
+        <View style={[styles.bottomCtaWrap, { paddingBottom: 80 + safeBottom }]}>
           <Pressable
             style={styles.logoutCta}
             onPress={async () => {
@@ -278,12 +257,15 @@ export function ProfileScreen({ navigation }: Props) {
           </Pressable>
         </View>
       ) : null}
+      <BottomTabs navigation={navigation} activeTab="account" />
+      </View>
     </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
   safeArea: { flex: 1, backgroundColor: '#F5F5F3' },
+  screenBody: { flex: 1 },
   content: { paddingHorizontal: 14, paddingTop: 10, gap: 11, marginTop: 30 },
   header: {
     flexDirection: 'row',
@@ -364,43 +346,6 @@ const styles = StyleSheet.create({
   infoContent: { flex: 1 },
   infoLabel: { color: '#98A2B3', fontSize: 8, letterSpacing: 1.2, fontFamily: 'Poppins-SemiBold' },
   infoValue: { marginTop: 2, color: '#131A28', fontSize: 13, fontFamily: 'Poppins-SemiBold', lineHeight: 18 },
-  languageCard: {
-    borderRadius: 17,
-    borderWidth: 1,
-    borderColor: '#E8EBEF',
-    backgroundColor: '#FFFFFF',
-    padding: 12,
-    gap: 10,
-    shadowColor: '#111827',
-    shadowOpacity: 0.04,
-    shadowRadius: 10,
-    shadowOffset: { width: 0, height: 6 },
-    elevation: 2,
-  },
-  langHeader: { flexDirection: 'row', gap: 10, alignItems: 'center' },
-  langHint: { marginTop: 3, color: '#6B7280', fontSize: 10, fontFamily: 'Poppins-Medium' },
-  langButtons: { flexDirection: 'row', gap: 8 },
-  langBtn: {
-    flex: 1,
-    minHeight: 38,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: '#E8EBEF',
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: '#F8FAFC',
-  },
-  langBtnActive: {
-    backgroundColor: '#F39200',
-    borderColor: '#F39200',
-    shadowColor: '#F59E0B',
-    shadowOpacity: 0.24,
-    shadowRadius: 8,
-    shadowOffset: { width: 0, height: 3 },
-    elevation: 2,
-  },
-  langBtnText: { color: '#374151', fontSize: 13, fontFamily: 'Poppins-SemiBold' },
-  langBtnTextActive: { color: '#FFFFFF', fontSize: 13, fontFamily: 'Poppins-Bold' },
   bottomCtaWrap: {
     position: 'absolute',
     left: 0,
@@ -450,4 +395,6 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   bottomCtaText: { color: '#FFFFFF', fontSize: 12, letterSpacing: 1, fontFamily: 'Poppins-Black' },
+  deleteAccountLink: { alignItems: 'center', paddingVertical: 8, marginBottom: 10 },
+  deleteAccountText: { color: '#9CA3AF', fontSize: 11, fontFamily: 'Poppins-Medium' },
 });

@@ -1,6 +1,6 @@
 import { authFetch } from './apiClient';
 
-const BASE_URL = 'https://pureapp.bhimajewellery.com/api';
+const BASE_URL = 'http://bhimaadmin.smacononline.com/api';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -18,6 +18,7 @@ export interface SchemeType {
   highlights: string[];
   duration: string | null;
   banner_image_url: string;
+  scheme_category: string;
 }
 
 export interface MyScheme {
@@ -52,9 +53,11 @@ export interface DashboardResponse {
   customer?: DashboardCustomer;
   todays_goldrate: GoldRate;
   /** Total paid / investment (API spelling) */
-  totalinstalment?: string;
+  totalinstalment?: string | number;
   /** Legacy typo — some responses may still use this; prefer `totalinstalment` */
-  totalinstallment?: string;
+  totalinstallment?: string | number;
+  /** Total metal/gold holdings in grams */
+  totalmetal?: string | number;
   /** When set (e.g. "6.8" or "+6.8%"), shown on the investment growth pill */
   investment_growth_percent?: string;
   schemetype: SchemeType[];
