@@ -31,8 +31,13 @@ export interface SchemeTypeDetail {
   multiple_of?: number | null;
   scheme_code?: number | null;
   allow_custom_amount_to_enter?: boolean;
+  text_above_amount?: string | null;
   calculation_type?: 'amount' | 'weight' | null;
   gold_rate?: string | null;
+  /** Description to show in projected maturity section (e.g., for No Making Charge scheme) */
+  des_in_prjected_mturity?: string | null;
+  /** Whether to show scheme bonus (false for No Making Charge scheme) */
+  show_scheme_bonus?: boolean;
   scheme?: SchemeEntry[];
   schemes: SchemeEntry[];
   /** May also arrive at response root; merged in `loadSchemeType`. */

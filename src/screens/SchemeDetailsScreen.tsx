@@ -1,10 +1,11 @@
-import React, { useCallback, useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
   Animated,
   Dimensions,
   Modal,
+  PanResponder,
   Pressable,
   SafeAreaView,
   ScrollView,
@@ -15,6 +16,7 @@ import {
 } from 'react-native';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import Ionicons from 'react-native-vector-icons/Ionicons';
+import { PencilLine } from 'lucide-react-native';
 import type { RootStackParamList } from '../navigation/types';
 import { goBackOrDashboard } from '../navigation/backNavigation';
 import { useSafeBottomInset } from '../utils/safeBottomInset';
@@ -33,6 +35,7 @@ import { initiateSchemeEnrollment, type InitiateSchemePayload } from '../api/cus
 import { getToken } from '../storage/auth';
 import { UnauthenticatedError } from '../api/apiClient';
 import { BottomTabs } from '../components/BottomTabs';
+import { HtmlContent } from '../components/HtmlContent';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'SchemeDetails'>;
 
@@ -46,6 +49,109 @@ function parseDuration(duration: string | null): number {
 // Safe INR formatter
 function formatINR(value: number): string {
   return value.toLocaleString('en-IN');
+}
+
+function formatCompactAmount(value: number): string {
+  if (value >= 1000 && value < 100000 && value % 1000 === 0) {
+    return `₹${value / 1000}K`;
+  }
+  return `₹${formatINR(value)}`;
+}
+
+const SLIDER_THUMB_SIZE = 22;
+
+function ContributionSlider({
+  amounts,
+  selectedAmount,
+  onSelect,
+}: {
+  amounts: number[];
+  selectedAmount: number | null;
+  onSelect: (amount: number) => void;
+}) {
+  const [trackWidth, setTrackWidth] = useState(0);
+  const [dragIndex, setDragIndex] = useState<number | null>(null);
+  const onSelectRef = useRef(onSelect);
+  const amountsRef = useRef(amounts);
+  const trackWidthRef = useRef(trackWidth);
+
+  useEffect(() => { onSelectRef.current = onSelect; }, [onSelect]);
+  useEffect(() => { amountsRef.current = amounts; }, [amounts]);
+  useEffect(() => { trackWidthRef.current = trackWidth; }, [trackWidth]);
+
+  const getIndexFromPosition = useCallback((x: number) => {
+    const values = amountsRef.current;
+    const width = trackWidthRef.current;
+    if (values.length === 0 || width <= 0) { return 0; }
+    if (values.length === 1) { return 0; }
+    const ratio = Math.max(0, Math.min(1, x / width));
+    return Math.round(ratio * (values.length - 1));
+  }, []);
+
+  const setValueFromPosition = useCallback((x: number, commit: boolean) => {
+    const values = amountsRef.current;
+    if (values.length === 0) { return; }
+    const index = getIndexFromPosition(x);
+    if (commit) {
+      setDragIndex(null);
+      onSelectRef.current(values[index]);
+    } else {
+      setDragIndex(index);
+    }
+  }, [getIndexFromPosition]);
+
+  const panResponder = useMemo(
+    () => PanResponder.create({
+      onStartShouldSetPanResponder: () => true,
+      onMoveShouldSetPanResponder: () => true,
+      onPanResponderGrant: (evt) => {
+        setValueFromPosition(evt.nativeEvent.locationX, false);
+      },
+      onPanResponderMove: (evt) => {
+        setValueFromPosition(evt.nativeEvent.locationX, false);
+      },
+      onPanResponderRelease: (evt) => {
+        setValueFromPosition(evt.nativeEvent.locationX, true);
+      },
+    }),
+    [setValueFromPosition],
+  );
+
+  const selectedIndex = selectedAmount != null
+    ? Math.max(0, amounts.indexOf(selectedAmount))
+    : 0;
+  const activeIndex = dragIndex ?? selectedIndex;
+  const fillPercent = amounts.length > 1
+    ? (activeIndex / (amounts.length - 1)) * 100
+    : 0;
+  const thumbLeft = trackWidth > 0
+    ? Math.max(0, Math.min(trackWidth - SLIDER_THUMB_SIZE, (fillPercent / 100) * trackWidth - SLIDER_THUMB_SIZE / 2))
+    : 0;
+  const minAmount = amounts[0] ?? 0;
+  const maxAmount = amounts[amounts.length - 1] ?? 0;
+
+  if (amounts.length === 0) {
+    return null;
+  }
+
+  return (
+    <View style={styles.sliderWrap}>
+      <View
+        style={styles.sliderTrack}
+        onLayout={(event) => {
+          setTrackWidth(event.nativeEvent.layout.width);
+        }}
+        {...panResponder.panHandlers}
+      >
+        <View style={styles.sliderRail} />
+        <View style={[styles.sliderThumb, { left: thumbLeft }]} />
+      </View>
+      <View style={styles.sliderLabels}>
+        <Text style={styles.sliderLabelText}>{formatCompactAmount(minAmount)}</Text>
+        <Text style={styles.sliderLabelText}>{formatCompactAmount(maxAmount)}</Text>
+      </View>
+    </View>
+  );
 }
 
 function parseMoneyField(v: string | number | undefined | null): number {
@@ -109,7 +215,7 @@ function formatGoldRowValue(grams: number, weightIn: string | null | undefined):
  * Calculate maturity based on scheme type and calculation_type from API
  * 
  * Scheme Type 1 (Bhima Gold Tree Future Plus): amount * duration + amount (full bonus)
- * Scheme Type 2 (Gold Tree No Making Charge): amount * duration + amount (full bonus)
+ * Scheme Type 2 (Gold Tree No Making Charge): amount * duration (NO bonus - shows description instead)
  * Scheme Type 3 (Gold Tree Weight Plan): (amount * duration) / gold_rate (weight in grams)
  * Scheme Type 4 (Gold Tree Coin Plan): amount * duration + amount/2 (half bonus)
  * Scheme Type 5 (Smart Gold): amount * duration + amount (full bonus)
@@ -120,6 +226,7 @@ interface MaturityCalculationResult {
   totalMaturity: number;
   isWeightBased: boolean;
   estimatedGold?: number;
+  isAmountBased?: boolean;
 }
 
 function calculateMaturity(
@@ -128,37 +235,65 @@ function calculateMaturity(
   schemeTypeId: number,
   calculationType: 'amount' | 'weight' | null | undefined,
   goldRate: string | null | undefined,
+  showBonus: boolean = true,
 ): MaturityCalculationResult {
-  const totalWithoutBonus = amount * duration;
+  const rate = goldRate ? parseFloat(goldRate) : 0;
   
-  // Weight-based calculation (Scheme Type 3)
-  if (calculationType === 'weight' && goldRate) {
-    const rate = parseFloat(goldRate);
-    if (rate > 0) {
-      const estimatedGold = totalWithoutBonus / rate;
-      return {
-        totalWithoutBonus,
-        bonusAmount: 0,
-        totalMaturity: totalWithoutBonus,
-        isWeightBased: true,
-        estimatedGold,
-      };
-    }
+  // Weight-based calculation (calculation_type === 'weight')
+  // For weight type: use amount directly (NOT multiplied by duration)
+  // Shows "Gold earned today" - instant gold value for the amount entered
+  if (calculationType === 'weight' && rate > 0) {
+    const estimatedGold = amount / rate;
+    return {
+      totalWithoutBonus: amount,
+      bonusAmount: 0,
+      totalMaturity: amount,
+      isWeightBased: true,
+      estimatedGold,
+    };
   }
   
-  // Amount-based calculation
+  // Amount-based calculation (calculation_type === 'amount')
+  // For amount type: multiply amount by duration for total maturity
+  // Shows "Estimated Future Value"
+  if (calculationType === 'amount' && rate > 0) {
+    const totalWithoutBonus = amount * duration;
+    const estimatedGold = totalWithoutBonus / rate;
+    return {
+      totalWithoutBonus,
+      bonusAmount: 0,
+      totalMaturity: totalWithoutBonus,
+      isWeightBased: false,
+      estimatedGold,
+      isAmountBased: true,
+    };
+  }
+  
+  // Default calculation for other schemes (no calculation_type specified)
+  const totalWithoutBonus = amount * duration;
   let bonusAmount = amount; // Default: full bonus (1 month)
   
   // Scheme Type 4 (Gold Tree Coin Plan): half bonus
   if (schemeTypeId === 4) {
     bonusAmount = amount / 2;
   }
+
+  // Scheme Type 2 (No Making Charge): No bonus
+  if (schemeTypeId === 2 || !showBonus) {
+    bonusAmount = 0;
+  }
+
+  const totalMaturity = totalWithoutBonus + bonusAmount;
+  
+  // Calculate estimated gold for default schemes using total maturity
+  const estimatedGold = rate > 0 ? totalMaturity / rate : undefined;
   
   return {
     totalWithoutBonus,
     bonusAmount,
-    totalMaturity: totalWithoutBonus + bonusAmount,
+    totalMaturity,
     isWeightBased: false,
+    estimatedGold,
   };
 }
 
@@ -192,6 +327,12 @@ export function SchemeDetailsScreen({ navigation, route }: Props) {
   const [customMaturity, setCustomMaturity] = useState<SchemeMaturityResponse | null>(null);
   const [customMaturityLoading, setCustomMaturityLoading] = useState(false);
   const slideAnim = useRef(new Animated.Value(0)).current;
+  const customAmountPulseAnim = useRef(new Animated.Value(1)).current;
+  const customAmountPressAnim = useRef(new Animated.Value(1)).current;
+
+  // ── Shake animation for T&C validation ─────────────────────────────────────────
+  const termsShakeAnim = useRef(new Animated.Value(0)).current;
+  const [showTermsError, setShowTermsError] = useState(false);
 
   // ── Scheme attributes from API ─────────────────────────────────────────────────
   const [schemeAttributes, setSchemeAttributes] = useState<SchemeAttribute[]>([]);
@@ -211,6 +352,7 @@ export function SchemeDetailsScreen({ navigation, route }: Props) {
           ? { ...detail, projected_maturity: mergedPm }
           : detail;
         setSchemeTypeData(nextDetail);
+        console.log("nextDetail==", nextDetail)
         // Store attributes from API response
         setSchemeAttributes(result.attributes ?? []);
         // Do not auto-select scheme - user must tap to select
@@ -353,6 +495,19 @@ export function SchemeDetailsScreen({ navigation, route }: Props) {
   const exclusiveBenefitAttr = schemeAttributes.find(
     attr => attr.field_name.toLowerCase() === 'exclusive benefit'
   );
+  // Banner attributes from API
+  const topBannerTagAttr = schemeAttributes.find(
+    attr => attr.field_name.toLowerCase() === 'top_banner_tag'
+  );
+  const schemeBriefingAttr = schemeAttributes.find(
+    attr => attr.field_name.toLowerCase() === 'scheme_briefing'
+  );
+  const schemeBenefitBannerAttr = schemeAttributes.find(
+    attr => attr.field_name.toLowerCase() === 'scheme_benefit'
+  );
+  const schemeDurationAttr = schemeAttributes.find(
+    attr => attr.field_name.toLowerCase() === 'scheme_duration'
+  );
 
   // Get selected scheme from index
   const schemes = schemeTypeData?.scheme ?? [];
@@ -382,6 +537,7 @@ export function SchemeDetailsScreen({ navigation, route }: Props) {
   const bonusAmount = maturityCalc.bonusAmount;
   const calculatedTotalMaturity = maturityCalc.totalMaturity;
   const isWeightBasedScheme = maturityCalc.isWeightBased;
+  const isAmountBasedScheme = maturityCalc.isAmountBased === true;
   const staticEstimatedGold = maturityCalc.estimatedGold;
 
   // For weight-based schemes, show estimated gold; for others, use API value if available
@@ -396,9 +552,31 @@ export function SchemeDetailsScreen({ navigation, route }: Props) {
   const hasBonus = !isWeightBasedScheme && bonusAmount > 0;
 
   const hasValidAmount = customAmount ? !validateAmount(customAmount) : selectedSchemeIndex !== null;
-  const canJoinScheme = hasValidAmount && hasAcceptedTerms && !joiningScheme;
+  const hasProjectionContent =
+    displayedMonthlyAmount > 0 &&
+    (selectedSchemeIndex !== null || (!!customAmount && !customAmountError));
+  const showProjectionCard =
+    maturityLoading || hasProjectionContent || schemes.length > 0;
+  // Button stays enabled - T&C validation happens on click with shake animation
+  const canJoinScheme = hasValidAmount && !joiningScheme;
   const allowCustomAmount = schemeTypeData?.allow_custom_amount_to_enter === true;
   const multipleOf = schemeTypeData?.multiple_of || 1;
+  const tabAmounts = useMemo(
+    () => schemes.map(scheme => parseFloat(scheme.min_amount)),
+    [schemes],
+  );
+  const selectedTabAmount = selectedSchemeIndex !== null && !customAmount
+    ? parseFloat(schemes[selectedSchemeIndex].min_amount)
+    : null;
+  const showContributionAmount = selectedSchemeIndex !== null && !customAmount;
+
+  const handleTabAmountSelect = useCallback((amount: number) => {
+    const index = schemes.findIndex(scheme => parseFloat(scheme.min_amount) === amount);
+    if (index < 0) { return; }
+    setCustomAmount('');
+    setCustomMaturity(null);
+    handleSchemeTabPress(index, schemes[index]);
+  }, [handleSchemeTabPress, schemes]);
 
   const showToast = useCallback((message: string) => {
     setToastMessage(message);
@@ -417,10 +595,28 @@ export function SchemeDetailsScreen({ navigation, route }: Props) {
     }
   }, []);
 
+  // Shake animation for T&C section
+  const triggerTermsShake = useCallback(() => {
+    setShowTermsError(true);
+    termsShakeAnim.setValue(0);
+    Animated.sequence([
+      Animated.timing(termsShakeAnim, { toValue: 10, duration: 50, useNativeDriver: true }),
+      Animated.timing(termsShakeAnim, { toValue: -10, duration: 50, useNativeDriver: true }),
+      Animated.timing(termsShakeAnim, { toValue: 10, duration: 50, useNativeDriver: true }),
+      Animated.timing(termsShakeAnim, { toValue: -10, duration: 50, useNativeDriver: true }),
+      Animated.timing(termsShakeAnim, { toValue: 5, duration: 50, useNativeDriver: true }),
+      Animated.timing(termsShakeAnim, { toValue: 0, duration: 50, useNativeDriver: true }),
+    ]).start();
+    setTimeout(() => setShowTermsError(false), 3000);
+  }, [termsShakeAnim]);
+
   const handleJoinScheme = useCallback(async () => {
     if (joiningScheme) { return; }
+    
+    // Validate T&C acceptance with shake animation
     if (!hasAcceptedTerms) {
-      showToast('Please accept terms and condition');
+      triggerTermsShake();
+      showToast('Please accept Terms & Conditions to continue');
       return;
     }
 
@@ -467,8 +663,11 @@ export function SchemeDetailsScreen({ navigation, route }: Props) {
         schemeTypeData?.gold_rate,
       );
       
+      // For Smart Gold (Type 5), pass undefined/null for maturityLabel
       let maturityLabelForNav: string | undefined;
-      if (maturityCalcForNav.isWeightBased && maturityCalcForNav.estimatedGold != null) {
+      if (schemeTypeId === 5) {
+        maturityLabelForNav = undefined;
+      } else if (maturityCalcForNav.isWeightBased && maturityCalcForNav.estimatedGold != null) {
         maturityLabelForNav = formatGoldRowValue(maturityCalcForNav.estimatedGold, 'grams');
       } else {
         maturityLabelForNav = `₹${formatINR(maturityCalcForNav.totalMaturity)}`;
@@ -481,6 +680,9 @@ export function SchemeDetailsScreen({ navigation, route }: Props) {
         schemeName: schemeTypeData?.scheme_type_name ?? 'Scheme',
         monthlyAmount: amount,
         maturityLabel: maturityLabelForNav,
+        calculationType: schemeTypeData?.calculation_type ?? null,
+        schemeTypeId: schemeTypeId,
+        textAboveAmount: schemeTypeData?.text_above_amount?.trim() || undefined,
       });
     } catch (e) {
       if (e instanceof UnauthenticatedError) { return; }
@@ -498,7 +700,53 @@ export function SchemeDetailsScreen({ navigation, route }: Props) {
     schemeTypeId,
     selectedScheme,
     showToast,
+    triggerTermsShake,
   ]);
+
+  useEffect(() => {
+    if (!allowCustomAmount || customAmount) {
+      customAmountPulseAnim.setValue(1);
+      return undefined;
+    }
+
+    const pulseLoop = Animated.loop(
+      Animated.sequence([
+        Animated.timing(customAmountPulseAnim, {
+          toValue: 1.025,
+          duration: 850,
+          useNativeDriver: true,
+        }),
+        Animated.timing(customAmountPulseAnim, {
+          toValue: 1,
+          duration: 850,
+          useNativeDriver: true,
+        }),
+      ]),
+    );
+
+    pulseLoop.start();
+    return () => pulseLoop.stop();
+  }, [allowCustomAmount, customAmount, customAmountPulseAnim]);
+
+  const customAmountScale = Animated.multiply(customAmountPulseAnim, customAmountPressAnim);
+
+  const handleCustomAmountPressIn = useCallback(() => {
+    Animated.spring(customAmountPressAnim, {
+      toValue: 0.96,
+      useNativeDriver: true,
+      speed: 40,
+      bounciness: 0,
+    }).start();
+  }, [customAmountPressAnim]);
+
+  const handleCustomAmountPressOut = useCallback(() => {
+    Animated.spring(customAmountPressAnim, {
+      toValue: 1,
+      useNativeDriver: true,
+      speed: 24,
+      bounciness: 6,
+    }).start();
+  }, [customAmountPressAnim]);
 
   // ── Loading / Error screens ────────────────────────────────────────────────
   if (loading) {
@@ -555,13 +803,17 @@ export function SchemeDetailsScreen({ navigation, route }: Props) {
 
         {/* Title block */}
         <Text style={styles.title}>{schemeTypeData.scheme_type_name}</Text>
-        <Text style={styles.tagline}>{schemeTypeData.short_description.toUpperCase()}</Text>
-        {schemeTypeData.duration ? (
+        <Text style={styles.tagline}>
+          {schemeBriefingAttr?.field_value || schemeTypeData.short_description}
+        </Text>
+        {(topBannerTagAttr || schemeDurationAttr || schemeTypeData.duration) && (
           <Text style={styles.subtitle}>
-            "Save for {durationMonths} months{exclusiveBenefitAttr || schemeBenefitAttr ? '. Get 1 month bonus' : ''}."
+            {topBannerTagAttr?.field_value || (
+              schemeDurationAttr?.field_value 
+                ? `Duration: ${schemeDurationAttr.field_value}`
+                : `Save for ${durationMonths} months${exclusiveBenefitAttr || schemeBenefitAttr ? '. Get 1 month bonus' : ''}.`
+            )}
           </Text>
-        ) : (
-          <Text style={styles.subtitle}>"{schemeTypeData.short_description}"</Text>
         )}
 
         {/* Benefit card – only if exclusive benefit attribute exists */}
@@ -582,29 +834,34 @@ export function SchemeDetailsScreen({ navigation, route }: Props) {
         {/* Scheme briefing */}
         <View style={styles.briefCard}>
           <Text style={styles.sectionLabel}>SCHEME BRIEFING</Text>
+          
+          {/* Scheme Briefing from API or fallback */}
           <View style={styles.briefTopRow}>
             <View style={styles.briefIconWrap}>
-              <Ionicons name="cash-outline" size={18} color="#FFFFFF" />
+              <Ionicons name="information-circle-outline" size={18} color="#FFFFFF" />
             </View>
             <Text style={styles.briefText}>
-              {schemeTypeData.min_amount && schemeTypeData.max_amount ? (
-                <>
-                  Monthly installments from{' '}
-                  <Text style={styles.briefTextAccent}>
-                    ₹{parseFloat(schemeTypeData.min_amount).toLocaleString('en-IN')}
-                  </Text>{' '}
-                  to{' '}
-                  <Text style={styles.briefTextAccent}>
-                    ₹{parseFloat(schemeTypeData.max_amount).toLocaleString('en-IN')}
-                  </Text>.
-                </>
-              ) : (
-                'Flexible monthly installments available.'
+              {schemeBriefingAttr?.field_value || (
+                schemeTypeData.min_amount && schemeTypeData.max_amount ? (
+                  <>
+                    Monthly installments from{' '}
+                    <Text style={styles.briefTextAccent}>
+                      ₹{parseFloat(schemeTypeData.min_amount).toLocaleString('en-IN')}
+                    </Text>{' '}
+                    to{' '}
+                    <Text style={styles.briefTextAccent}>
+                      ₹{parseFloat(schemeTypeData.max_amount).toLocaleString('en-IN')}
+                    </Text>.
+                  </>
+                ) : (
+                  'Flexible monthly installments available.'
+                )
               )}
             </Text>
           </View>
 
-          {schemeBenefitAttr && (
+          {/* Scheme Benefit from API */}
+          {schemeBenefitBannerAttr && (
             <View style={styles.bonusInline}>
               <View style={styles.bonusTopRow}>
                 <View style={styles.bonusIconWrap}>
@@ -613,77 +870,91 @@ export function SchemeDetailsScreen({ navigation, route }: Props) {
                 <View style={styles.bonusTextWrap}>
                   <Text style={styles.bonusInlineLabel}>SCHEME BENEFIT</Text>
                   <Text style={styles.bonusInlineValue}>
-                    {schemeBenefitAttr.field_value.split(' - ')[0]}
+                    {schemeBenefitBannerAttr.field_value}
                   </Text>
                 </View>
               </View>
-              {schemeBenefitAttr.field_value.includes(' - ') && (
-                <View style={styles.bonusBadge}>
-                  <Text style={styles.bonusBadgeText}>
-                    {schemeBenefitAttr.field_value.split(' - ')[1]}
-                  </Text>
-                </View>
-              )}
             </View>
           )}
 
-          {schemeTypeData.duration ? (
+          {/* Scheme Duration from API or fallback */}
+          {(schemeDurationAttr || schemeTypeData.duration) && (
             <View style={styles.durationRow}>
               <Ionicons name="time-outline" size={13} color="#F39200" />
-              <Text style={styles.durationText}>{schemeTypeData.duration}</Text>
+              <Text style={styles.durationText}>
+                {schemeDurationAttr?.field_value || schemeTypeData.duration}
+              </Text>
             </View>
-          ) : null}
+          )}
         </View>
 
-        {/* ── Scheme plan tabs ──────────────────────────────────────────────── */}
-        {(schemeTypeData.scheme ?? []).length > 0 && (
-         
-          <>
-            <Text style={styles.sectionLabel}>SELECT PLAN</Text>
-            <ScrollView
-              horizontal
-              showsHorizontalScrollIndicator={false}
-              contentContainerStyle={styles.tabsScrollContent}
-            >
-              {(schemeTypeData.scheme ?? []).map((scheme, index) => {
-                const isActive = !customAmount && selectedSchemeIndex === index;
-                const isPopular = index === 0;
-                return (
-                  <Pressable
-                    key={`${scheme.min_amount}-${index}`}
-                    style={[styles.schemeTab, isActive && styles.schemeTabActive]}
-                    onPress={() => {
-                      setCustomAmount('');
-                      setCustomMaturity(null);
-                      handleSchemeTabPress(index, scheme);
-                    }}
-                  >
-                    {isPopular && (
-                      <View style={styles.popularDot}>
-                        <Ionicons name="star" size={7} color="#FFFFFF" />
-                      </View>
-                    )}
-                    <Text style={[styles.schemeTabAmount, isActive && styles.schemeTabAmountActive]}>
-                      ₹{parseFloat(scheme.min_amount).toLocaleString('en-IN')}
-                    </Text>
-                    <Text style={[styles.schemeTabSub, isActive && styles.schemeTabSubActive]}>
-                      {scheme.duration} mo
-                    </Text>
-                  </Pressable>
-                );
-              })}
-            </ScrollView>
-          </>
+        {/* ── Monthly contribution ─────────────────────────────────────────── */}
+        {(schemes.length > 0 || allowCustomAmount) && (
+          <View style={styles.monthlyContributionSection}>
+            <View style={styles.monthlyContributionHeader}>
+              <Text style={styles.monthlyContributionLabel}>MONTHLY CONTRIBUTION</Text>
+              {showContributionAmount && selectedTabAmount != null && (
+                <Text style={styles.monthlyContributionValue}>
+                  ₹{formatINR(selectedTabAmount)}
+                </Text>
+              )}
+            </View>
+
+            {tabAmounts.length > 0 && (
+              <ContributionSlider
+                amounts={tabAmounts}
+                selectedAmount={selectedTabAmount}
+                onSelect={handleTabAmountSelect}
+              />
+            )}
+
+            {schemes.length > 0 && (
+              <ScrollView
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                contentContainerStyle={styles.tabsScrollContent}
+              >
+                {schemes.map((scheme, index) => {
+                  const amount = parseFloat(scheme.min_amount);
+                  const isActive = !customAmount && selectedSchemeIndex === index;
+                  return (
+                    <Pressable
+                      key={`${scheme.min_amount}-${index}`}
+                      style={[styles.schemeTab, isActive && styles.schemeTabActive]}
+                      onPress={() => {
+                        setCustomAmount('');
+                        setCustomMaturity(null);
+                        handleSchemeTabPress(index, scheme);
+                      }}
+                    >
+                      <Text style={[styles.schemeTabAmount, isActive && styles.schemeTabAmountActive]}>
+                        {formatCompactAmount(amount)}
+                      </Text>
+                    </Pressable>
+                  );
+                })}
+              </ScrollView>
+            )}
+          </View>
         )}
 
         {/* ── Enter your own amount ─────────────────────────────────────────── */}
         {allowCustomAmount && (
-          <Pressable 
-            style={[styles.customAmountCard, customAmount && styles.customAmountCardActive]} 
+          <Pressable
             onPress={openAmountModal}
+            onPressIn={handleCustomAmountPressIn}
+            onPressOut={handleCustomAmountPressOut}
+            accessibilityRole="button"
           >
-            <View style={[styles.customAmountIconWrap, customAmount && styles.customAmountIconWrapActive]}>
-              <Ionicons name={customAmount ? "checkmark" : "pencil"} size={16} color={customAmount ? "#FFFFFF" : "#F39200"} />
+            <Animated.View
+              style={[
+                styles.customAmountCard,
+                customAmount && styles.customAmountCardActive,
+                { transform: [{ scale: customAmountScale }] },
+              ]}
+            >
+            <View style={styles.customAmountIconWrap}>
+              <PencilLine size={20} color="#FFFFFF" strokeWidth={2.25} />
             </View>
             <View style={styles.customAmountTextWrap}>
               {customAmount ? (
@@ -698,7 +969,8 @@ export function SchemeDetailsScreen({ navigation, route }: Props) {
                 </>
               )}
             </View>
-            <Ionicons name={customAmount ? "create-outline" : "chevron-forward"} size={18} color={customAmount ? "#F39200" : "#9CA3AF"} />
+            <Ionicons name="chevron-forward" size={22} color="#FFFFFF" />
+            </Animated.View>
           </Pressable>
         )}
 
@@ -712,55 +984,47 @@ export function SchemeDetailsScreen({ navigation, route }: Props) {
           </View>
         )}
 
+        {/* ── Description from API - always shown when available ──────────────── */}
+        {schemeTypeData?.des_in_prjected_mturity && (
+          <View style={styles.maturityDescriptionCard}>
+            <Ionicons name="gift-outline" size={18} color="#0D9488" />
+            <Text style={styles.maturityDescriptionCardText}>
+              {schemeTypeData?.des_in_prjected_mturity}
+            </Text>
+          </View>
+        )}
+
         {/* ── Projected maturity card ───────────────────────────────────────── */}
-        {/* Show maturity when a scheme tab is selected OR valid custom amount is entered */}
+        {/* Show when loading, amount/plan selected, or scheme tabs need placeholder */}
+        {showProjectionCard && (
         <View style={styles.projectionCard}>
           {maturityLoading ? (
             <View style={styles.maturityLoadingWrap}>
               <ActivityIndicator size="small" color="#E88800" />
               <Text style={styles.maturityLoadingText}>Calculating maturity…</Text>
             </View>
-          ) : (displayedMonthlyAmount > 0 && (selectedSchemeIndex !== null || (customAmount && !customAmountError))) ? (
+          ) : hasProjectionContent ? (
             <>
               <View style={styles.projectedMaturityHeader}>
-                <Ionicons name="trending-up" size={16} color="#0D9488" />
-                <Text style={styles.projectedMaturityTitle}>PROJECTED MATURITY</Text>
+                <Ionicons name={isWeightBasedScheme ? "flash" : "trending-up"} size={16} color="#0D9488" />
+                <Text style={styles.projectedMaturityTitle}>
+                  {isWeightBasedScheme 
+                    ? 'GOLD EARNED TODAY' 
+                    : isAmountBasedScheme 
+                      ? 'ESTIMATED FUTURE VALUE' 
+                      : 'ESTIMATED FUTURE VALUE'}
+                </Text>
               </View>
 
               <View style={styles.infoRow}>
-                <Text style={styles.infoKey}>MONTHLY AMOUNT</Text>
+                <Text style={styles.infoKey}>AMOUNT</Text>
                 <Text style={styles.infoValue}>
                   ₹{formatINR(displayedMonthlyAmount)}
                 </Text>
               </View>
 
-              {/* Show rupee total only for amount-based schemes */}
-              {!isWeightBasedScheme && (
-                <View style={styles.infoRow}>
-                  <Text style={styles.infoKey}>{calculatedDuration}-MONTH TOTAL</Text>
-                  <Text style={styles.infoValue}>
-                    ₹{formatINR(calculatedTotalWithoutBonus)}
-                  </Text>
-                </View>
-              )}
-
-              {/* Show bonus only for amount-based schemes */}
-              {!isWeightBasedScheme && bonusAmount > 0 && (
-                <View style={styles.infoRow}>
-                  <View style={styles.bonusLabelWithBadge}>
-                    <Text style={styles.infoKey}>SCHEME BONUS</Text>
-                    <View style={styles.giftBadge}>
-                      <Text style={styles.giftBadgeText}>GIFT</Text>
-                    </View>
-                  </View>
-                  <Text style={styles.bonusValueAccent}>
-                    +₹{formatINR(bonusAmount)}
-                  </Text>
-                </View>
-              )}
-
-              {/* Show estimated gold for weight-based schemes */}
-              {isWeightBasedScheme && staticEstimatedGold != null && (
+              {/* For amount-based schemes (calculation_type === 'amount'): only show Est. Gold */}
+              {isAmountBasedScheme && staticEstimatedGold != null && (
                 <View style={styles.estGoldRow}>
                   <Text style={styles.estGoldLabel}>
                     {formatGoldRowLabel('grams')}
@@ -771,23 +1035,66 @@ export function SchemeDetailsScreen({ navigation, route }: Props) {
                 </View>
               )}
 
-              <View style={styles.divider} />
-              {isWeightBasedScheme ? (
-                <View style={styles.infoRow}>
-                  <Text style={styles.totalLabel}>TOTAL GOLD WEIGHT</Text>
-                  <Text style={styles.totalValue}>
-                    {staticEstimatedGold != null 
-                      ? formatGoldRowValue(staticEstimatedGold, 'grams')
-                      : '—'}
-                  </Text>
-                </View>
-              ) : (
-                <View style={styles.infoRow}>
-                  <Text style={styles.totalLabel}>TOTAL MATURITY VALUE</Text>
-                  <Text style={styles.totalValue}>
-                    ₹{formatINR(calculatedTotalMaturity)}
-                  </Text>
-                </View>
+              {/* For weight-based and other schemes: show duration-based calculations */}
+              {!isAmountBasedScheme && (
+                <>
+                  {/* Show rupee total only for non-weight schemes */}
+                  {!isWeightBasedScheme && (
+                    <View style={styles.infoRow}>
+                      <Text style={styles.infoKey}>{calculatedDuration}-MONTH TOTAL</Text>
+                      <Text style={styles.infoValue}>
+                        ₹{formatINR(calculatedTotalWithoutBonus)}
+                      </Text>
+                    </View>
+                  )}
+
+                  {/* Show bonus for non-weight schemes (NOT for Type 2 No Making Charge) */}
+                  {!isWeightBasedScheme && bonusAmount > 0 && schemeTypeId !== 2 && (
+                    <View style={styles.infoRow}>
+                      <View style={styles.bonusLabelWithBadge}>
+                        <Text style={styles.infoKey}>SCHEME BONUS</Text>
+                        <View style={styles.giftBadge}>
+                          <Text style={styles.giftBadgeText}>GIFT</Text>
+                        </View>
+                      </View>
+                      <Text style={styles.bonusValueAccent}>
+                        +₹{formatINR(bonusAmount)}
+                      </Text>
+                    </View>
+                  )}
+
+                  {/* Show estimated gold */}
+                  {staticEstimatedGold != null && (
+                    <View style={styles.estGoldRow}>
+                      <Text style={styles.estGoldLabel}>
+                        {formatGoldRowLabel('grams')}
+                      </Text>
+                      <Text style={styles.estGoldValue}>
+                        {formatGoldRowValue(staticEstimatedGold, 'grams')}
+                      </Text>
+                    </View>
+                  )}
+
+                  {/* Show divider and total */}
+                  <View style={styles.divider} />
+                  {isWeightBasedScheme ? (
+                    <View style={styles.infoRow}>
+                      <Text style={styles.totalLabel}>TOTAL GOLD WEIGHT</Text>
+                      <Text style={styles.totalValue}>
+                        {staticEstimatedGold != null 
+                          ? formatGoldRowValue(staticEstimatedGold, 'grams')
+                          : '—'}
+                      </Text>
+                    </View>
+                  ) : (
+                    <View style={styles.infoRow}>
+                      <Text style={styles.totalLabel}>TOTAL MATURITY VALUE</Text>
+                      <Text style={styles.totalValue}>
+                        ₹{formatINR(calculatedTotalMaturity)}
+                      </Text>
+                    </View>
+                  )}
+                </>
               )}
             </>
           ) : (
@@ -798,6 +1105,7 @@ export function SchemeDetailsScreen({ navigation, route }: Props) {
             </Text>
           )}
         </View>
+        )}
 
         {/* ── Savings timeline ─────────────────────────────────────────────── */}
         {maturity && (
@@ -834,28 +1142,51 @@ export function SchemeDetailsScreen({ navigation, route }: Props) {
         {schemeTypeData.terms_and_conditions ? (
           <View style={styles.termsCard}>
             <Text style={styles.termsCardLabel}>TERMS & CONDITIONS</Text>
-            <Text style={styles.termsCardText}>{schemeTypeData.terms_and_conditions}</Text>
+            <HtmlContent
+              html={schemeTypeData.terms_and_conditions}
+              baseStyle={styles.termsCardText}
+              horizontalInset={56}
+            />
           </View>
         ) : null}
 
       </ScrollView>
 
-      <View style={[styles.termsBar, { bottom: 150 + safeBottom }]}>
-        <Pressable style={styles.termsRow} onPress={() => setHasAcceptedTerms(previous => !previous)}>
-          <View style={[styles.termsIconWrap, !hasAcceptedTerms && styles.termsIconWrapUnchecked]}>
+      <Animated.View
+        style={[
+          styles.termsBar,
+          { bottom: 150 + safeBottom },
+          { transform: [{ translateX: termsShakeAnim }] },
+          showTermsError && styles.termsBarError,
+        ]}
+      >
+        <Pressable
+          style={styles.termsRow}
+          onPress={() => {
+            setHasAcceptedTerms(previous => !previous);
+            setShowTermsError(false);
+          }}
+        >
+          <View style={[styles.termsIconWrap, !hasAcceptedTerms && styles.termsIconWrapUnchecked, showTermsError && styles.termsIconWrapError]}>
             {hasAcceptedTerms ? (
               <Ionicons name="checkmark-circle-outline" size={14} color="#FFFFFF" />
             ) : (
-              <Ionicons name="ellipse-outline" size={14} color="#98A2B3" />
+              <Ionicons name="ellipse-outline" size={14} color={showTermsError ? "#EF4444" : "#98A2B3"} />
             )}
           </View>
-          <Text style={styles.termsText}>
+          <Text style={[styles.termsText, showTermsError && styles.termsTextError]}>
             I agree to the{' '}
             <Text style={styles.termsAccent}>Terms & Conditions</Text> and confirm that I
             have read the scheme details including the bonus eligibility criteria.
           </Text>
         </Pressable>
-      </View>
+        {showTermsError && (
+          <View style={styles.termsErrorRow}>
+            <Ionicons name="alert-circle" size={12} color="#EF4444" />
+            <Text style={styles.termsErrorText}>Please accept to continue</Text>
+          </View>
+        )}
+      </Animated.View>
 
       {/* Bottom CTA */}
       <View style={[styles.bottomAction, { bottom: 70 + safeBottom }]}>
@@ -906,7 +1237,9 @@ export function SchemeDetailsScreen({ navigation, route }: Props) {
             <Pressable onPress={() => {}}>
               <View style={styles.modalHandle} />
 
-              <Text style={styles.modalLabel}>MONTHLY CONTRIBUTION</Text>
+              <Text style={styles.modalLabel}>
+                {(schemeTypeData?.text_above_amount?.trim() || 'MONTHLY CONTRIBUTION').toUpperCase()}
+              </Text>
 
               <View style={styles.modalAmountDisplay}>
                 <Text style={styles.rupeeSymbol}>₹</Text>
@@ -1218,51 +1551,96 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontFamily: 'Poppins-SemiBold',
   },
+  // ── Monthly contribution ───────────────────────────────────────────────────
+  monthlyContributionSection: {
+    gap: 16,
+  },
+  monthlyContributionHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  monthlyContributionLabel: {
+    color: '#98A2B3',
+    letterSpacing: 1.8,
+    fontFamily: 'Poppins-Bold',
+    fontSize: 10,
+  },
+  monthlyContributionValue: {
+    color: '#111827',
+    fontSize: 24,
+    fontFamily: 'Poppins-BoldItalic',
+  },
+  sliderWrap: {
+    gap: 8,
+    paddingVertical: 4,
+  },
+  sliderTrack: {
+    height: 28,
+    justifyContent: 'center',
+    position: 'relative',
+  },
+  sliderRail: {
+    height: 4,
+    borderRadius: 999,
+    backgroundColor: '#E5E7EB',
+  },
+  sliderThumb: {
+    position: 'absolute',
+    width: SLIDER_THUMB_SIZE,
+    height: SLIDER_THUMB_SIZE,
+    borderRadius: SLIDER_THUMB_SIZE / 2,
+    backgroundColor: '#F39200',
+    top: 3,
+    shadowColor: '#F39200',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.35,
+    shadowRadius: 4,
+    elevation: 4,
+  },
+  sliderLabels: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  sliderLabelText: {
+    color: '#98A2B3',
+    fontSize: 11,
+    fontFamily: 'Poppins-Medium',
+  },
   // ── Scheme tabs ─────────────────────────────────────────────────────────────
   tabsScrollContent: {
-    gap: 8,
+    gap: 10,
     paddingRight: 2,
   },
   schemeTab: {
-    borderRadius: 14,
-    backgroundColor: '#EEF2F6',
-    paddingHorizontal: 14,
-    paddingVertical: 10,
+    borderRadius:15,
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+    height: 45,
+    width: 75,
     alignItems: 'center',
     justifyContent: 'center',
-    minWidth: 72,
-    position: 'relative',
   },
   schemeTabActive: {
     backgroundColor: '#111827',
-  },
-  popularDot: {
-    position: 'absolute',
-    top: -4,
-    right: -4,
-    width: 16,
-    height: 16,
-    borderRadius: 8,
-    backgroundColor: '#F7A714',
-    alignItems: 'center',
-    justifyContent: 'center',
+    borderColor: '#111827',
+    shadowColor: '#111827',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.18,
+    shadowRadius: 8,
+    elevation: 4,
   },
   schemeTabAmount: {
-    color: '#4B5563',
-    fontSize: 13,
-    fontFamily: 'Poppins-Black',
+    color: '#98A2B3',
+    fontSize: 14,
+    fontFamily: 'Poppins-Bold',
+    alignSelf: 'center',
+    marginTop: 3,
   },
   schemeTabAmountActive: {
     color: '#FFFFFF',
-  },
-  schemeTabSub: {
-    marginTop: 2,
-    color: '#9CA3AF',
-    fontSize: 9,
-    fontFamily: 'Poppins-SemiBold',
-  },
-  schemeTabSubActive: {
-    color: '#9CA3AF',
   },
   // ── Projected maturity card ──────────────────────────────────────────────
   projectionCard: {
@@ -1310,6 +1688,42 @@ const styles = StyleSheet.create({
     fontSize: 10,
     letterSpacing: 2,
     fontFamily: 'Poppins-Bold',
+  },
+  maturityDescriptionWrap: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 6,
+    backgroundColor: '#F0FDF4',
+    borderRadius: 8,
+    padding: 10,
+    marginBottom: 12,
+    borderWidth: 1,
+    borderColor: '#D1FAE5',
+  },
+  maturityDescriptionText: {
+    flex: 1,
+    color: '#065F46',
+    fontSize: 11,
+    lineHeight: 16,
+    fontFamily: 'Poppins-Medium',
+  },
+  maturityDescriptionCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    backgroundColor: '#ECFDF5',
+    borderRadius: 12,
+    padding: 14,
+    marginBottom: 16,
+    borderWidth: 1,
+    borderColor: '#A7F3D0',
+  },
+  maturityDescriptionCardText: {
+    flex: 1,
+    color: '#065F46',
+    fontSize: 13,
+    lineHeight: 20,
+    fontFamily: 'Poppins-SemiBold',
   },
   bonusLabelWithBadge: {
     flexDirection: 'row',
@@ -1496,12 +1910,34 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: '#D0D5DD',
   },
+  termsIconWrapError: {
+    borderColor: '#EF4444',
+  },
+  termsBarError: {
+    borderWidth: 1.5,
+    borderColor: '#EF4444',
+  },
   termsText: {
     flex: 1,
     color: '#6B7280',
     fontSize: 11,
     lineHeight: 18,
     fontFamily: 'Poppins-SemiBold',
+  },
+  termsTextError: {
+    color: '#EF4444',
+  },
+  termsErrorRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: 12,
+    paddingBottom: 6,
+  },
+  termsErrorText: {
+    color: '#EF4444',
+    fontSize: 10,
+    fontFamily: 'Poppins-Medium',
   },
   termsAccent: {
     color: '#111827',
@@ -1562,60 +1998,79 @@ const styles = StyleSheet.create({
   },
   // ── Custom amount card ─────────────────────────────────────────────────────
   customAmountCard: {
-    borderRadius: 16,
-    backgroundColor: '#FFFBF0',
-    borderWidth: 1,
-    borderColor: '#F5E6C4',
-    padding: 14,
+    borderRadius: 20,
+    backgroundColor: '#F39200',
+    paddingVertical: 16,
+    paddingHorizontal: 16,
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 12,
+    gap: 14,
+    marginTop: 12,
+    shadowColor: '#C45F00',
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.38,
+    shadowRadius: 18,
+    elevation: 10,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.18)',
   },
   customAmountIconWrap: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    backgroundColor: '#FFF7E6',
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: 1,
-    borderColor: '#F5D68A',
+    // width: 44,
+    // height: 44,
+    marginRight:5,
+    marginLeft:5,
+    // borderRadius: 14,
+    // backgroundColor: '#FFFFFF',
+    // alignItems: 'center',
+     justifyContent: 'center',
+    // shadowColor: '#000000',
+    // shadowOffset: { width: 0, height: 2 },
+    // shadowOpacity: 0.12,
+    // shadowRadius: 4,
+    // elevation: 3,
   },
   customAmountTextWrap: {
     flex: 1,
   },
   customAmountTitle: {
-    color: '#F39200',
-    fontSize: 11,
-    fontFamily: 'Poppins-Black',
-    letterSpacing: 1.1,
+    color: '#FFFFFF',
+    fontSize: 13,
+    fontFamily: 'Poppins-Bold',
+    letterSpacing: 0.5,
   },
   customAmountHint: {
-    color: '#9CA3AF',
-    fontSize: 11,
-    fontFamily: 'Poppins-Medium',
+    color: '#FFFFFF',
+    fontSize: 12,
+    fontFamily: 'Poppins-Regular',
     marginTop: 2,
   },
   customAmountCardActive: {
-    backgroundColor: '#FFF3E0',
-    borderColor: '#F39200',
-    borderWidth: 2,
+    shadowColor: '#9A4E00',
+    shadowOpacity: 0.45,
+    borderColor: 'rgba(255,255,255,0.28)',
   },
   customAmountIconWrapActive: {
-    backgroundColor: '#F39200',
-    borderColor: '#F39200',
+    backgroundColor: '#C9B037',
   },
   customAmountSelectedLabel: {
-    color: '#6B7280',
+    color: '#FFFFFF',
     fontSize: 10,
-    fontFamily: 'Poppins-Medium',
+    fontFamily: 'Poppins-Bold',
     letterSpacing: 0.5,
   },
   customAmountSelectedValue: {
-    color: '#1F2937',
-    fontSize: 16,
+    color: '#FFFFFF',
+    fontSize: 18,
     fontFamily: 'Poppins-Bold',
     marginTop: 2,
+  },
+  customAmountArrow: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: '#374151',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   // ── Helper text ──────────────────────────────────────────────────────────────
   helperTextWrap: {
@@ -1666,7 +2121,7 @@ const styles = StyleSheet.create({
     marginBottom: 8,
   },
   rupeeSymbol: {
-    color: '#F39200',
+    color: '#A79862',
     fontSize: 32,
     fontFamily: 'Poppins-Bold',
     marginRight: 4,
@@ -1677,7 +2132,7 @@ const styles = StyleSheet.create({
     fontFamily: 'Poppins-Black',
   },
   modalHint: {
-    color: '#F39200',
+    color: '#9CA3AF',
     fontSize: 10,
     fontFamily: 'Poppins-Bold',
     letterSpacing: 1.5,

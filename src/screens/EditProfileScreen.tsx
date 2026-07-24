@@ -204,15 +204,18 @@ export function EditProfileScreen({ navigation }: Props) {
         // KYC
         setPan(d.kyc_details?.pan_number ?? '');
         setAadhaar(d.kyc_details?.aadhaar_number ?? '');
-        // Language preference - handle both string ("ta"/"en") and object formats
+        // Language preference - handle string ("ta"/"en"/"Tamil"/"English") and object formats
         let appLang = 'en';
         if (typeof d.language_preference === 'string') {
-          appLang = d.language_preference;
+          appLang = d.language_preference.toLowerCase().trim();
         } else if (d.language_preference && typeof d.language_preference === 'object') {
-          appLang = (d.language_preference as { app_language?: string }).app_language ?? 'en';
+          const objLang = (d.language_preference as { app_language?: string }).app_language ?? 'en';
+          appLang = objLang.toLowerCase().trim();
         }
-        setLanguagePreference(appLang === 'Tamil' || appLang === 'ta' ? 'ta' : 'en');
-        console.log('Language from API:', d.language_preference, '-> Setting:', appLang);
+        // Check for Tamil language (handles 'ta', 'tamil', 'தமிழ்')
+        const isTamil = appLang === 'ta' || appLang === 'tamil' || appLang.includes('தமிழ்');
+        setLanguagePreference(isTamil ? 'ta' : 'en');
+        console.log('Language from API:', d.language_preference, '-> Setting:', isTamil ? 'ta' : 'en');
       }
 
       const branchList = branchRes.success ? (branchRes.branchdata ?? []) : [];
@@ -621,66 +624,68 @@ export function EditProfileScreen({ navigation }: Props) {
         {/* Language Preference */}
         <Text style={styles.sectionTitle}>LANGUAGE PREFERENCE</Text>
         <Label text="APP LANGUAGE" />
-        <Pressable
-          style={styles.dropdownRow}
-          onPress={() => {
-            setBranchDropdownOpen(false);
-            setStateDropdownOpen(false);
-            setLanguageDropdownOpen(prev => !prev);
-          }}
-        >
-          <Ionicons name="language-outline" size={15} color="#9CA3AF" />
-          <Text style={styles.dropdownText}>
-            {languagePreference === 'en' ? 'English' : 'தமிழ் (Tamil)'}
-          </Text>
-          <Ionicons
-            name={languageDropdownOpen ? 'chevron-up' : 'chevron-down'}
-            size={15}
-            color="#9CA3AF"
-          />
-        </Pressable>
-        {languageDropdownOpen && (
-          <View style={styles.dropdownList}>
-            <Pressable
-              style={[
-                styles.dropdownItem,
-                languagePreference === 'en' && styles.dropdownItemActive,
-              ]}
-              onPress={() => handleLanguageSelect('en')}
-            >
-              <Text
+        <View style={styles.languageDropdownContainer}>
+          {languageDropdownOpen && (
+            <View style={styles.dropdownListUpward}>
+              <Pressable
                 style={[
-                  styles.dropdownItemText,
-                  languagePreference === 'en' && styles.dropdownItemTextActive,
+                  styles.dropdownItem,
+                  languagePreference === 'en' && styles.dropdownItemActive,
                 ]}
+                onPress={() => handleLanguageSelect('en')}
               >
-                English
-              </Text>
-              {languagePreference === 'en' && (
-                <Ionicons name="checkmark" size={14} color="#F39200" />
-              )}
-            </Pressable>
-            <Pressable
-              style={[
-                styles.dropdownItem,
-                languagePreference === 'ta' && styles.dropdownItemActive,
-              ]}
-              onPress={() => handleLanguageSelect('ta')}
-            >
-              <Text
+                <Text
+                  style={[
+                    styles.dropdownItemText,
+                    languagePreference === 'en' && styles.dropdownItemTextActive,
+                  ]}
+                >
+                  English
+                </Text>
+                {languagePreference === 'en' && (
+                  <Ionicons name="checkmark" size={14} color="#F39200" />
+                )}
+              </Pressable>
+              <Pressable
                 style={[
-                  styles.dropdownItemText,
-                  languagePreference === 'ta' && styles.dropdownItemTextActive,
+                  styles.dropdownItem,
+                  languagePreference === 'ta' && styles.dropdownItemActive,
                 ]}
+                onPress={() => handleLanguageSelect('ta')}
               >
-                தமிழ் (Tamil)
-              </Text>
-              {languagePreference === 'ta' && (
-                <Ionicons name="checkmark" size={14} color="#F39200" />
-              )}
-            </Pressable>
-          </View>
-        )}
+                <Text
+                  style={[
+                    styles.dropdownItemText,
+                    languagePreference === 'ta' && styles.dropdownItemTextActive,
+                  ]}
+                >
+                  தமிழ் (Tamil)
+                </Text>
+                {languagePreference === 'ta' && (
+                  <Ionicons name="checkmark" size={14} color="#F39200" />
+                )}
+              </Pressable>
+            </View>
+          )}
+          <Pressable
+            style={[styles.dropdownRow, styles.dropdownRowSelected]}
+            onPress={() => {
+              setBranchDropdownOpen(false);
+              setStateDropdownOpen(false);
+              setLanguageDropdownOpen(prev => !prev);
+            }}
+          >
+            <Ionicons name="language-outline" size={15} color="#F39200" />
+            <Text style={[styles.dropdownText, styles.dropdownTextSelected]}>
+              {languagePreference === 'en' ? 'English' : 'தமிழ் (Tamil)'}
+            </Text>
+            <Ionicons
+              name={languageDropdownOpen ? 'chevron-up' : 'chevron-down'}
+              size={15}
+              color="#F39200"
+            />
+          </Pressable>
+        </View>
       </ScrollView>
 
       <View style={[styles.bottomCtaWrap, { bottom: 70 + safeBottom }]}>
@@ -790,10 +795,12 @@ const styles = StyleSheet.create({
     marginBottom: 4,
   },
   dropdownText: { flex: 1, color: '#131A28', fontSize: 13, fontFamily: 'Poppins-Medium' },
+  dropdownTextSelected: { color: '#131A28', fontFamily: 'Poppins-SemiBold' },
+  dropdownRowSelected: { borderColor: '#F39200', backgroundColor: '#FFFBF5' },
   dropdownPlaceholder: { color: '#9CA3AF' },
   dropdownContainer: {
     position: 'relative',
-    zIndex: 10,
+    zIndex: 100,
     marginBottom: 9,
   },
   dropdownList: {
@@ -803,6 +810,8 @@ const styles = StyleSheet.create({
     backgroundColor: '#FFFFFF',
     overflow: 'hidden',
     marginBottom: 9,
+    zIndex: 100,
+    elevation: 10,
   },
   dropdownListScrollable: {
     borderRadius: 14,
@@ -811,6 +820,30 @@ const styles = StyleSheet.create({
     backgroundColor: '#FFFFFF',
     maxHeight: 250,
     marginTop: 4,
+    zIndex: 100,
+    elevation: 10,
+  },
+  languageDropdownContainer: {
+    position: 'relative',
+    zIndex: 200,
+    marginBottom: 100,
+  },
+  dropdownListUpward: {
+    position: 'absolute',
+    bottom: 50,
+    left: 0,
+    right: 0,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: '#E8EBEF',
+    backgroundColor: '#FFFFFF',
+    overflow: 'hidden',
+    zIndex: 200,
+    elevation: 20,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: -4 },
+    shadowOpacity: 0.15,
+    shadowRadius: 8,
   },
   dropdownItem: {
     flexDirection: 'row',
@@ -835,6 +868,7 @@ const styles = StyleSheet.create({
     paddingTop: 8,
     borderTopWidth: 1,
     borderTopColor: '#E8EBEF',
+    zIndex: 1,
   },
   bottomCta: {
     minHeight: 54,

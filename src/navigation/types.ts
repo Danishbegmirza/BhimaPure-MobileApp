@@ -6,7 +6,7 @@ export type RootStackParamList = {
   VerifyOtp: { phoneNumber: string };
   Dashboard: undefined;
   MetalRates: undefined;
-  MySchemes: undefined;
+  MySchemes: { openSchemeId?: string } | undefined;
   MySchemeDetails: { schemeId: string };
   GoldRedemption: { schemeId: string };
   SelectShowroom: { schemeId: string };
@@ -40,5 +40,8 @@ export type RootStackParamList = {
     schemeName: string;
     monthlyAmount: number;
     maturityLabel?: string;
+    calculationType?: 'amount' | 'weight' | null;
+    schemeTypeId?: number;
+    textAboveAmount?: string;
   };
 };

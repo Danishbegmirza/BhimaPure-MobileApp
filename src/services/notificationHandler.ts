@@ -135,9 +135,8 @@ function handlePaymentReminderNotification(data: NotificationData): void {
     return;
   }
 
-  console.log('Navigating to MySchemeDetails with customer_scheme_id:', data.customer_scheme_id);
-  // Navigate to MySchemeDetails with the customer scheme ID
-  navigationRef.navigate('MySchemeDetails', { schemeId: data.customer_scheme_id });
+  console.log('Navigating to MySchemes with openSchemeId:', data.customer_scheme_id);
+  navigationRef.navigate('MySchemes', { openSchemeId: data.customer_scheme_id });
 }
 
 /**

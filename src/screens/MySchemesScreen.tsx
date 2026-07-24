@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Animated,
+  BackHandler,
   Dimensions,
   Modal,
   Pressable,
@@ -20,6 +21,7 @@ import { fetchMyPortfolio, type PortfolioScheme, type PortfolioCounts } from '..
 import { getToken } from '../storage/auth';
 import { goBackOrDashboard } from '../navigation/backNavigation';
 import { BottomTabs } from '../components/BottomTabs';
+import { SchemeDetailsSheet } from '../components/SchemeDetailsSheet';
 import { useSafeBottomInset } from '../utils/safeBottomInset';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'MySchemes'>;
@@ -51,7 +53,7 @@ function getInstallmentAmount(scheme: PortfolioScheme): number {
     return scheme.scheme_amount;
   }
   const { total_invested, progress_percent } = scheme.metrics;
-  if (total_invested > 0 && progress_percent > 0) {
+  if (total_invested > 0 && progress_percent != null && progress_percent > 0) {
     const assumedMonths = 11;
     const paidSlots = Math.max(1, Math.round((progress_percent / 100) * assumedMonths));
     return Math.max(500, Math.round(total_invested / paidSlots));
@@ -61,6 +63,22 @@ function getInstallmentAmount(scheme: PortfolioScheme): number {
 
 function formatINR(value: number): string {
   return value.toLocaleString('en-IN');
+}
+
+function formatGoldHoldings(value: string | number | null | undefined): string {
+  if (value == null || value === '') { return '0g'; }
+  const num = typeof value === 'string' ? parseFloat(value) : value;
+  if (isNaN(num)) { return '0g'; }
+  const trimmed = String(num).replace(/\.?0+$/, '');
+  return `${trimmed}g`;
+}
+
+function isAverageRateBookingSmart(scheme: PortfolioScheme): boolean {
+  return scheme.scheme.name.trim() === 'Average Rate Booking Smart';
+}
+
+function requiresCustomAmountEntry(scheme: PortfolioScheme): boolean {
+  return scheme.variable_installment_allow === true || isAverageRateBookingSmart(scheme);
 }
 
 // ─── Sub-components ───────────────────────────────────────────────────────────
@@ -107,6 +125,7 @@ function SchemePortfolioCard({
 
   const showActionButton = !isRedeemed && !isPaymentCompleted;
   const actionLabel = isMatured ? 'REDEEM' : 'PAY NOW';
+  const showGoldHoldings = scheme.show_gold_holdings === 'yes';
 
   return (
     <View style={styles.card}>
@@ -136,9 +155,11 @@ function SchemePortfolioCard({
           <Text style={styles.schemeName}>{scheme.scheme.name}</Text>
           <Text style={styles.metaText}>MATURITY: {formatDate(scheme.maturity_date)}</Text>
         </View>
-        <View style={styles.progressRing}>
-          <Text style={styles.progressText}>{scheme.metrics.progress_percent}%</Text>
-        </View>
+        {scheme.metrics.progress_percent != null && (
+          <View style={styles.progressRing}>
+            <Text style={styles.progressText}>{scheme.metrics.progress_percent}%</Text>
+          </View>
+        )}
       </View>
 
       {/* Amounts */}
@@ -150,9 +171,13 @@ function SchemePortfolioCard({
           </Text>
         </View>
         <View style={styles.amountRight}>
-          <Text style={styles.amountLabel}>ELIGIBLE VALUE</Text>
+          <Text style={showGoldHoldings ? styles.amountValueGoldHoldingsAccent : styles.amountLabel}>
+            {showGoldHoldings ? 'GOLD HOLDINGS' : 'ELIGIBLE VALUE'}
+          </Text>
           <Text style={styles.amountValueAccent}>
-            ₹{scheme.metrics.eligible_value.toLocaleString('en-IN')}
+            {showGoldHoldings
+              ? formatGoldHoldings(scheme.metrics.gold_holdings)
+              : `₹${scheme.metrics.eligible_value.toLocaleString('en-IN')}`}
           </Text>
         </View>
       </View>
@@ -193,8 +218,9 @@ function SchemePortfolioCard({
 
 // ─── Main Screen ──────────────────────────────────────────────────────────────
 
-export function MySchemesScreen({ navigation }: Props) {
+export function MySchemesScreen({ navigation, route }: Props) {
   const safeBottom = useSafeBottomInset();
+  const bottomTabHeight = 78 + Math.max(safeBottom, 6);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -215,6 +241,10 @@ export function MySchemesScreen({ navigation }: Props) {
   const [tempAmount, setTempAmount] = useState<string>('');
   const [amountError, setAmountError] = useState<string>('');
   const slideAnim = useRef(new Animated.Value(0)).current;
+
+  const [detailsSchemeId, setDetailsSchemeId] = useState<number | null>(null);
+  const [heroHeight, setHeroHeight] = useState(0);
+  const detailsSlideAnim = useRef(new Animated.Value(0)).current;
 
   const loadPortfolio = useCallback(async () => {
     try {
@@ -282,7 +312,11 @@ export function MySchemesScreen({ navigation }: Props) {
   // ── Modal handlers ─────────────────────────────────────────────────────────
   const openAmountModal = useCallback((scheme: PortfolioScheme) => {
     setSelectedSchemeForPayment(scheme);
-    setTempAmount(scheme.scheme_amount?.toString() || '');
+    setTempAmount(
+      isAverageRateBookingSmart(scheme)
+        ? ''
+        : (scheme.scheme_amount?.toString() || ''),
+    );
     setAmountError('');
     setIsAmountModalVisible(true);
     Animated.spring(slideAnim, {
@@ -304,6 +338,43 @@ export function MySchemesScreen({ navigation }: Props) {
       setAmountError('');
     });
   }, [slideAnim]);
+
+  const openDetails = useCallback((schemeId: number) => {
+    setDetailsSchemeId(schemeId);
+    Animated.spring(detailsSlideAnim, {
+      toValue: 1,
+      useNativeDriver: true,
+      tension: 65,
+      friction: 11,
+    }).start();
+  }, [detailsSlideAnim]);
+
+  const closeDetails = useCallback(() => {
+    Animated.timing(detailsSlideAnim, {
+      toValue: 0,
+      duration: 200,
+      useNativeDriver: true,
+    }).start(() => {
+      setDetailsSchemeId(null);
+    });
+  }, [detailsSlideAnim]);
+
+  useEffect(() => {
+    const openId = route.params?.openSchemeId;
+    if (openId) {
+      openDetails(Number(openId));
+      navigation.setParams({ openSchemeId: undefined });
+    }
+  }, [route.params?.openSchemeId, openDetails, navigation]);
+
+  useEffect(() => {
+    if (detailsSchemeId === null) { return undefined; }
+    const subscription = BackHandler.addEventListener('hardwareBackPress', () => {
+      closeDetails();
+      return true;
+    });
+    return () => subscription.remove();
+  }, [detailsSchemeId, closeDetails]);
 
   const handleNumpadPress = useCallback((digit: string) => {
     setTempAmount(prev => {
@@ -340,7 +411,7 @@ export function MySchemesScreen({ navigation }: Props) {
 
   // ── Handle pay now action ──────────────────────────────────────────────────
   const handlePayNow = useCallback((scheme: PortfolioScheme) => {
-    if (scheme.variable_installment_allow === true) {
+    if (requiresCustomAmountEntry(scheme)) {
       openAmountModal(scheme);
     } else {
       const amount = getInstallmentAmount(scheme);
@@ -358,10 +429,10 @@ export function MySchemesScreen({ navigation }: Props) {
     <SafeAreaView style={styles.safeArea}>
       <StatusBar barStyle="light-content" backgroundColor="#050505" />
       <View style={styles.screenBody}>
-      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={[styles.content, { paddingBottom: 100 + safeBottom }]}>
-
-        {/* Hero */}
-        <View style={styles.hero}>
+        <View
+          style={styles.hero}
+          onLayout={event => setHeroHeight(event.nativeEvent.layout.height)}
+        >
           <View style={styles.topRow}>
             <Pressable style={styles.iconButton} onPress={() => goBackOrDashboard(navigation)}>
               <Ionicons name="arrow-back" size={20} color="#D1D5DB" />
@@ -407,6 +478,11 @@ export function MySchemesScreen({ navigation }: Props) {
           <View style={styles.heroSpacer} />
         </View>
 
+      <ScrollView
+        style={styles.listScroll}
+        showsVerticalScrollIndicator={false}
+        contentContainerStyle={[styles.content, { paddingBottom: 100 + safeBottom }]}
+      >
         {/* Filter pills */}
         <View style={styles.filterRow}>
           <FilterPill
@@ -461,9 +537,7 @@ export function MySchemesScreen({ navigation }: Props) {
             <SchemePortfolioCard
               key={scheme.id}
               scheme={scheme}
-              onViewDetails={() =>
-                navigation.navigate('MySchemeDetails', { schemeId: String(scheme.id) })
-              }
+              onViewDetails={() => openDetails(scheme.id)}
               onPrimaryAction={() =>
                 scheme.status === 'MATURED'
                   ? navigation.navigate('GoldRedemption', { schemeId: String(scheme.id) })
@@ -482,7 +556,38 @@ export function MySchemesScreen({ navigation }: Props) {
           </View>
         )}
       </ScrollView>
-      <BottomTabs navigation={navigation} activeTab="mySchemes" />
+
+      {detailsSchemeId !== null && (
+        <View style={styles.detailsOverlay} pointerEvents="box-none">
+          <Pressable
+            style={[styles.detailsBackdrop, { top: heroHeight, bottom: bottomTabHeight }]}
+            onPress={closeDetails}
+          />
+          <Animated.View
+            style={[
+              styles.detailsSheet,
+              {
+                transform: [{
+                  translateY: detailsSlideAnim.interpolate({
+                    inputRange: [0, 1],
+                    outputRange: [Dimensions.get('window').height, 0],
+                  }),
+                }],
+              },
+            ]}
+          >
+            <SchemeDetailsSheet
+              schemeId={detailsSchemeId}
+              onClose={closeDetails}
+              bottomPadding={bottomTabHeight + 16}
+            />
+          </Animated.View>
+        </View>
+      )}
+
+      <View style={styles.bottomTabsLayer}>
+        <BottomTabs navigation={navigation} activeTab="mySchemes" />
+      </View>
       </View>
 
       {/* ── Variable Installment Amount Modal ─────────────────────────────────── */}
@@ -509,7 +614,11 @@ export function MySchemesScreen({ navigation }: Props) {
             <Pressable onPress={() => {}}>
               <View style={styles.modalHandle} />
 
-              <Text style={styles.modalLabel}>INSTALLMENT AMOUNT</Text>
+              <Text style={styles.modalLabel}>
+                {selectedSchemeForPayment && isAverageRateBookingSmart(selectedSchemeForPayment)
+                  ? 'ENTER YOUR AMOUNT'
+                  : 'INSTALLMENT AMOUNT'}
+              </Text>
 
               <View style={styles.modalAmountDisplay}>
                 <Text style={styles.rupeeSymbol}>₹</Text>
@@ -519,12 +628,24 @@ export function MySchemesScreen({ navigation }: Props) {
               </View>
 
               <Text style={styles.modalHint}>
-                {tempAmount
-                  ? 'CONFIRM YOUR INSTALLMENT AMOUNT'
-                  : 'ENTER AMOUNT TO PAY'}
+                {tempAmount ? 'CONFIRM YOUR INSTALLMENT AMOUNT' : 'ENTER AMOUNT TO PAY'}
               </Text>
 
-              {selectedSchemeForPayment?.scheme?.multiple_of && selectedSchemeForPayment.scheme.multiple_of > 1 && (
+              {selectedSchemeForPayment && isAverageRateBookingSmart(selectedSchemeForPayment) && (
+                <View style={styles.helperWrap}>
+                  <Ionicons name="information-circle-outline" size={14} color="#9CA3AF" />
+                  <Text style={styles.helperText}>
+                    Minimum amount: ₹{formatINR(parseFloat(selectedSchemeForPayment.scheme.min_amount || '100'))}
+                    {selectedSchemeForPayment.scheme.multiple_of && selectedSchemeForPayment.scheme.multiple_of > 1
+                      ? `  ·  Multiples of ₹${formatINR(selectedSchemeForPayment.scheme.multiple_of)}`
+                      : ''}
+                  </Text>
+                </View>
+              )}
+
+              {selectedSchemeForPayment?.scheme?.multiple_of
+                && selectedSchemeForPayment.scheme.multiple_of > 1
+                && !isAverageRateBookingSmart(selectedSchemeForPayment) && (
                 <View style={styles.helperWrap}>
                   <Ionicons name="information-circle-outline" size={14} color="#9CA3AF" />
                   <Text style={styles.helperText}>
@@ -599,6 +720,10 @@ const styles = StyleSheet.create({
   },
   screenBody: {
     flex: 1,
+  },
+  listScroll: {
+    flex: 1,
+    backgroundColor: '#F5F5F3',
   },
   content: {
     paddingBottom: 24,
@@ -711,7 +836,7 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     gap: 6,
     paddingHorizontal: 14,
-    marginTop: 2,
+    marginTop: 15,
   },
   filterPill: {
     flex: 1,
@@ -921,6 +1046,13 @@ const styles = StyleSheet.create({
     fontSize: 22,
     fontFamily: 'Poppins-BoldItalic',
   },
+  amountValueGoldHoldingsAccent: {
+    color: '#F39200',
+    marginTop: 2,
+    fontSize: 8,
+    letterSpacing: 1.1,
+    fontFamily: 'Poppins-Bold'
+  },
   infoBar: {
     borderRadius: 12,
     backgroundColor: '#F8FAFC',
@@ -1008,6 +1140,35 @@ const styles = StyleSheet.create({
     letterSpacing: 1.3,
   },
   // ── Amount Entry Modal ─────────────────────────────────────────────────────
+  detailsOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    zIndex: 30,
+    elevation: 30,
+  },
+  detailsBackdrop: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: 'rgba(0, 0, 0, 0.45)',
+  },
+  detailsSheet: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    bottom: 0,
+    height: '78%',
+    backgroundColor: '#F8F9FB',
+    borderTopLeftRadius: 30,
+    borderTopRightRadius: 30,
+    overflow: 'hidden',
+    zIndex: 31,
+    elevation: 31,
+  },
+  bottomTabsLayer: {
+    zIndex: 40,
+    elevation: 40,
+  },
   modalOverlay: {
     flex: 1,
     backgroundColor: 'rgba(0, 0, 0, 0.7)',

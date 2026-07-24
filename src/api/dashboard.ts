@@ -26,10 +26,10 @@ export interface MyScheme {
   amount: string;
   status: string;
   due: {
-    label: string;
+    label: string | null;
     date: string;
     status: string; // 'OVERDUE' | 'PAID' | etc.
-    text: string;
+    text: string | null;
     is_paid: boolean;
     paid_on: string | null;
   };

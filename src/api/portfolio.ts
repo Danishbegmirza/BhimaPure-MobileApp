@@ -10,7 +10,8 @@ export interface PortfolioSchemeMetrics {
   maturity_amount: number;
   bonus_percent: number;
   bonus_amount: number;
-  progress_percent: number;
+  progress_percent: number | null;
+  gold_holdings?: string | number | null;
 }
 
 export interface PortfolioNextPayment {
@@ -43,6 +44,7 @@ export interface PortfolioScheme {
   nominee_relation?: string | null;
   metrics: PortfolioSchemeMetrics;
   next_payment: PortfolioNextPayment;
+  show_gold_holdings?: string | null;
   payment_history?: Array<{
     installment_amount: string;
     installment_date: string;

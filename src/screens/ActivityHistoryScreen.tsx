@@ -145,9 +145,9 @@ export function ActivityHistoryScreen({ navigation }: Props) {
             <Ionicons name="arrow-back" size={20} color="#111827" />
           </Pressable>
           <Text style={styles.headerTitle}>Transaction History</Text>
-          <View style={styles.downloadBtn}>
+          {/* <View style={styles.downloadBtn}>
             <Ionicons name="download-outline" size={14} color="#F39200" />
-          </View>
+          </View> */}
         </View>
 
         {/* Search bar */}
@@ -177,14 +177,14 @@ export function ActivityHistoryScreen({ navigation }: Props) {
         </View>
 
         {/* Filter chips */}
-        <View style={styles.filterRow}>
+        {/* <View style={styles.filterRow}>
           <FilterChip label="ALL" active={filter === 'all'} onPress={() => setFilter('all')} />
           <FilterChip
             label="INSTALLMENTS"
             active={filter === 'installments'}
             onPress={() => setFilter('installments')}
           />
-        </View>
+        </View> */}
 
         {/* Body */}
         {loading ? (
@@ -203,7 +203,7 @@ export function ActivityHistoryScreen({ navigation }: Props) {
             </Pressable>
           </View>
         ) : filtered.length === 0 ? (
-          <View style={styles.emptyWrap}>
+          <View style={[styles.emptyWrap,{marginTop: 70}]}>
             <Ionicons name="receipt-outline" size={40} color="#D1D5DB" />
             <Text style={styles.emptyText}>No transactions found.</Text>
           </View>

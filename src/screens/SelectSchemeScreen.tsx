@@ -40,7 +40,7 @@ function SchemeCard({
           <Image
             source={{ uri: item.banner_image_url }}
             style={StyleSheet.absoluteFill}
-            resizeMode="cover"
+            resizeMode='cover'
           />
         ) : null}
         <View style={styles.bannerOverlay}>

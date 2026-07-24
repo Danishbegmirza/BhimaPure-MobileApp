@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState, useCallback } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -11,6 +11,8 @@ import {
   Text,
   TextInput,
   View,
+  NativeEventEmitter,
+  NativeModules,
 } from 'react-native';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import Ionicons from 'react-native-vector-icons/Ionicons';
@@ -21,6 +23,22 @@ import { saveToken, saveCustomer, savePendingMobile } from '../storage/auth';
 import { goBackOrDashboard } from '../navigation/backNavigation';
 import { useSafeBottomInset } from '../utils/safeBottomInset';
 import { getFCMToken } from '../services/notifications';
+
+// Import SMS Retriever for Android OTP auto-read
+let SmsRetriever: {
+  requestPhoneNumber: () => Promise<string>;
+  startSmsRetriever: () => Promise<boolean>;
+  addSmsListener: (callback: (event: { message?: string }) => void) => { remove: () => void };
+  removeSmsListener: () => void;
+} | null = null;
+
+if (Platform.OS === 'android') {
+  try {
+    SmsRetriever = require('react-native-sms-retriever').default;
+  } catch (e) {
+    console.log('react-native-sms-retriever not available');
+  }
+}
 
 type Props = NativeStackScreenProps<RootStackParamList, 'VerifyOtp'>;
 
@@ -53,6 +71,80 @@ export function VerifyOtpScreen({ navigation, route }: Props) {
       clearInterval(timerId);
     };
   }, [secondsLeft]);
+
+  // ─── Extract OTP from SMS message ──────────────────────────────────────────
+  const extractOtpFromMessage = useCallback((message: string): string | null => {
+    if (!message) return null;
+    // Match 6-digit OTP
+    const otpMatch = message.match(/\b(\d{6})\b/);
+    return otpMatch ? otpMatch[1] : null;
+  }, []);
+
+  // ─── OTP Auto-fill listener (Android only) using SMS Retriever ─────────────
+  useEffect(() => {
+    if (Platform.OS !== 'android' || !SmsRetriever) {
+      return undefined;
+    }
+
+    let smsListener: { remove: () => void } | null = null;
+
+    const initSmsRetriever = async () => {
+      try {
+        // Start the SMS Retriever - it will listen for SMS containing app hash
+        // Note: Get app hash by running: cd android && ./gradlew signingReport
+        // Then calculate hash using package name + SHA256 certificate fingerprint
+        console.log('==============================================');
+        console.log('SMS Retriever: Starting...');
+        console.log('To get App Hash, run in android folder:');
+        console.log('./gradlew signingReport');
+        console.log('Then use AppSignatureHelper or online hash generator');
+        console.log('==============================================');
+        
+        const registered = await SmsRetriever!.startSmsRetriever();
+        console.log('SMS Retriever started:', registered);
+
+        if (registered) {
+          // Add listener for incoming SMS
+          smsListener = SmsRetriever!.addSmsListener((event) => {
+            console.log('SMS Event received:', event);
+            if (event?.message) {
+              const extractedOtp = extractOtpFromMessage(event.message);
+              if (extractedOtp) {
+                console.log('OTP Auto-filled:', extractedOtp);
+                setOtp(extractedOtp);
+                setErrorMsg('');
+                // Remove listener after successful extraction
+                if (smsListener) {
+                  smsListener.remove();
+                }
+              }
+            }
+          });
+        }
+      } catch (error) {
+        console.log('SMS Retriever Error:', error);
+      }
+    };
+
+    initSmsRetriever();
+
+    return () => {
+      if (smsListener) {
+        try {
+          smsListener.remove();
+        } catch (e) {
+          // Ignore cleanup errors
+        }
+      }
+      if (SmsRetriever) {
+        try {
+          SmsRetriever.removeSmsListener();
+        } catch (e) {
+          // Ignore cleanup errors
+        }
+      }
+    };
+  }, [extractOtpFromMessage]);
 
   // ─── OTP input handler ──────────────────────────────────────────────────────
   const onOtpChange = (value: string) => {
@@ -134,6 +226,9 @@ export function VerifyOtpScreen({ navigation, route }: Props) {
           keyboardType="number-pad"
           maxLength={OTP_DIGITS}
           style={styles.hiddenInput}
+          autoComplete="sms-otp"
+          textContentType="oneTimeCode"
+          importantForAutofill="yes"
         />
 
         <Pressable style={styles.backButton} onPress={() => goBackOrDashboard(navigation)}>

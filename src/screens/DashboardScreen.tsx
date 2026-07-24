@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
   ImageBackground,
@@ -33,6 +33,7 @@ import { fetchProfile } from '../api/user';
 import { BottomTabs } from '../components/BottomTabs';
 import { useLanguage } from '../context/LanguageContext';
 import type { SupportedLanguage } from '../staticTexts';
+import { createFontPicker } from '../utils/fontFamily';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'Dashboard'>;
 
@@ -61,9 +62,9 @@ type SectionHeaderProps = {
 
 type SchemeItemProps = {
   name: string;
-  due: string;
+  due: string | null;
   dueStatus?: string;
-  dueText?: string;
+  dueText?: string | null;
   amount: string;
   status: string;
   onPress?: () => void;
@@ -75,9 +76,22 @@ type TransactionItemProps = {
   amount: string;
 };
 
+type DashboardStyles = ReturnType<typeof createDashboardStyles>;
+
+const DashboardStylesContext = createContext<DashboardStyles | null>(null);
+
+function useDashboardStyles(): DashboardStyles {
+  const styles = useContext(DashboardStylesContext);
+  if (!styles) {
+    throw new Error('useDashboardStyles must be used within DashboardStylesContext');
+  }
+  return styles;
+}
+
 // ─── Sub-components ───────────────────────────────────────────────────────────
 
 function SectionHeader({ title, action, actionAccent, onActionPress }: SectionHeaderProps) {
+  const styles = useDashboardStyles();
   return (
     <View style={styles.sectionHeader}>
       <Text style={styles.sectionTitle}>{title}</Text>
@@ -98,6 +112,7 @@ function WelcomeCard({
   customerName,
   isLoggedIn,
   onNotificationsPress,
+  onProfilePress,
   welcomeBackText,
   welcomeText,
   guestText,
@@ -105,15 +120,17 @@ function WelcomeCard({
   customerName: string;
   isLoggedIn: boolean;
   onNotificationsPress: () => void;
+  onProfilePress: () => void;
   welcomeBackText: string;
   welcomeText: string;
   guestText: string;
 }) {
+  const styles = useDashboardStyles();
   return (
     <View style={styles.welcomeCard}>
-      <View style={styles.profileBadge}>
+      <Pressable style={styles.profileBadge} onPress={onProfilePress}>
         <Image source={require('../assets/welcome.png')} style={{width: 44, height: 44, }} />
-      </View>
+      </Pressable>
       <View style={styles.welcomeTextWrap}>
         <Text style={styles.welcomeLabel}>{isLoggedIn ? welcomeBackText : welcomeText}</Text>
         <Text style={styles.welcomeName}>{customerName || guestText}</Text>
@@ -145,6 +162,7 @@ function LiveMarketGoldCard({
   perGram22kText: string;
   viewAllMetalRatesText: string;
 }) {
+  const styles = useDashboardStyles();
   const price = `₹${formatINR(goldRate22k || '0')}`;
   return (
     <Pressable style={styles.liveMarketCard} onPress={onPress}>
@@ -183,6 +201,7 @@ function InvestmentSummaryCards({
   gold22kLabel: string;
   totalInvestmentLabel: string;
 }) {
+  const styles = useDashboardStyles();
   return (
     <View style={styles.investmentRow}>
       <View style={styles.investmentCard}>
@@ -213,6 +232,7 @@ function InvestmentSummaryCards({
 }
 
 function JoinSchemeButton({ onPress, joinNewSchemeText }: { onPress: () => void; joinNewSchemeText: string }) {
+  const styles = useDashboardStyles();
   return (
     <Pressable style={styles.joinButton} onPress={onPress}>
       <View style={styles.plusBubble}>
@@ -224,6 +244,7 @@ function JoinSchemeButton({ onPress, joinNewSchemeText }: { onPress: () => void;
 }
 
 function SchemeItem({ name, due, dueStatus, dueText, amount, status, onPress }: SchemeItemProps) {
+  const styles = useDashboardStyles();
   const isOverdue = dueStatus === 'OVERDUE';
 
   const content = (
@@ -233,9 +254,11 @@ function SchemeItem({ name, due, dueStatus, dueText, amount, status, onPress }: 
       </View>
       <View style={styles.schemeCenter}>
         <Text style={styles.schemeName}>{name}</Text>
-        <Text style={[styles.schemeDue, isOverdue && styles.schemeDueOverdue]}>
-          DUE: {due}{dueText ? `  ·  ${dueText}` : ''}
-        </Text>
+        {due != null && due !== '' && (
+          <Text style={[styles.schemeDue, isOverdue && styles.schemeDueOverdue]}>
+            DUE: {due}{dueText ? `  ·  ${dueText}` : ''}
+          </Text>
+        )}
       </View>
       <View style={styles.schemeRight}>
         <Text style={styles.schemeAmount}>
@@ -278,6 +301,7 @@ function RecommendedCard({
   fixedMonthlyText: string;
   exploreDetailsText: string;
 }) {
+  const styles = useDashboardStyles();
   const cardTone = SCHEME_CARD_TONES[index % SCHEME_CARD_TONES.length];
 
   return (
@@ -318,6 +342,7 @@ function RecommendedCard({
 }
 
 function MarketAnalyticsCard({ goldRate22k }: { goldRate22k: string }) {
+  const styles = useDashboardStyles();
   return (
     <View style={styles.marketCard}>
       <View style={styles.marketHeader}>
@@ -337,6 +362,7 @@ function MarketAnalyticsCard({ goldRate22k }: { goldRate22k: string }) {
 }
 
 function TransactionItem({ title, date, amount, successText }: TransactionItemProps & { successText: string }) {
+  const styles = useDashboardStyles();
   return (
     <View style={styles.transactionItem}>
       <View style={styles.currencyDot}>
@@ -357,18 +383,19 @@ function TransactionItem({ title, date, amount, successText }: TransactionItemPr
 }
 
 function SupportCard({ needAssistanceText, whatsappSupportText }: { needAssistanceText: string; whatsappSupportText: string }) {
+  const styles = useDashboardStyles();
   return (
     <View style={styles.supportCard}>
       <View style={styles.supportLeft}>
         <View style={styles.supportIconCircle}>
-          <Image source={require('../assets/whatsapp.png')} style={{width: 40, height: 40, }} />
+          <Image source={require('../assets/whatsapp.png')} style={{width: 45, height: 45, }} />
         </View>
         <Pressable onPress={() => Linking.openURL('https://wa.me/918547771777')}>
           <Text style={styles.supportTopLabel}>{needAssistanceText}</Text>
           <Text style={styles.supportTitle}>{whatsappSupportText}</Text>
         </Pressable>
       </View>
-      <Text style={styles.supportArrow}> &gt; </Text>
+     <Image source={require('../assets/dashboardArrow.png')} style={{width: 20, height: 20, }} />
     </View>
   );
 }
@@ -382,7 +409,8 @@ export function DashboardScreen({ navigation }: Props) {
   const [data, setData] = useState<DashboardResponse | null>(null);
   const [goldRatesRows, setGoldRatesRows] = useState<GoldRateItem[]>([]);
   const [isLoggedIn, setIsLoggedIn] = useState(false);
-  const { texts, setLanguage } = useLanguage();
+  const { language, texts, setLanguage } = useLanguage();
+  const styles = useMemo(() => createDashboardStyles(language), [language]);
 
   const loadDashboard = useCallback(async () => {
     try {
@@ -480,7 +508,7 @@ export function DashboardScreen({ navigation }: Props) {
   // Gold holdings from totalmetal API response
   const totalMetalRaw = data?.totalmetal;
   const totalMetalNum = totalMetalRaw != null ? parseFloat(String(totalMetalRaw)) : NaN;
-  const goldHoldingsText = isLoggedIn && Number.isFinite(totalMetalNum) ? `${totalMetalNum.toFixed(2)}g` : '—';
+  const goldHoldingsText = isLoggedIn && Number.isFinite(totalMetalNum) ? `${totalMetalNum}g` : '—';
   
   const totalInvestmentText =
     isLoggedIn && totalInstalmentRaw != null ? `₹${formatINR(totalInstalmentRaw)}` : '—';
@@ -497,6 +525,7 @@ export function DashboardScreen({ navigation }: Props) {
   })();
 
   return (
+    <DashboardStylesContext.Provider value={styles}>
     <SafeAreaView style={styles.safeArea}>
       <StatusBar barStyle="dark-content" backgroundColor="#F5F5F3" />
       <View style={styles.screenBody}>
@@ -527,6 +556,7 @@ export function DashboardScreen({ navigation }: Props) {
               customerName={data?.customer?.name ?? ''}
               isLoggedIn={isLoggedIn}
               onNotificationsPress={() => navigation.navigate('Notifications')}
+              onProfilePress={() => navigation.navigate('Profile')}
               welcomeBackText={texts.dashboard.welcomeBack}
               welcomeText={texts.dashboard.welcome}
               guestText={texts.dashboard.guest}
@@ -598,7 +628,6 @@ export function DashboardScreen({ navigation }: Props) {
                     contentContainerStyle={styles.recommendedScrollContent}
                   >
                     {data.schemetype.map((st, index) => (
-                      console.log(st),
                       <RecommendedCard
                         key={st.id}
                         name={st.scheme_type_name}
@@ -656,10 +685,13 @@ export function DashboardScreen({ navigation }: Props) {
         <BottomTabs navigation={navigation} activeTab="home" />
       </View>
     </SafeAreaView>
+    </DashboardStylesContext.Provider>
   );
 }
 
-const styles = StyleSheet.create({
+function createDashboardStyles(language: SupportedLanguage) {
+  const f = createFontPicker(language);
+  return StyleSheet.create({
   safeArea: {
     flex: 1,
     backgroundColor: '#F5F5F3',
@@ -712,23 +744,25 @@ const styles = StyleSheet.create({
   profileIcon: {
     fontSize: 16,
     color: '#E68900',
-    fontFamily: 'Poppins-SemiBold',
+    fontFamily: f('Poppins-SemiBold'),
   },
   welcomeTextWrap: {
     flex: 1,
     marginLeft: 14,
+    marginTop: 4,
   },
   welcomeLabel: {
     fontSize: 10,
-    fontFamily: 'Poppins-SemiBold',
+    fontFamily: f('Poppins-SemiBold'),
     letterSpacing: 1.2,
     color: '#9AA3B2',
     textTransform: 'uppercase',
+    marginTop: 4,
   },
   welcomeName: {
-    marginTop: 2,
+    marginTop: 0,
     fontSize: 17,
-    fontFamily: 'Poppins-Bold',
+    fontFamily: f('Poppins-Bold'),
     color: '#111827',
   },
   topActions: {
@@ -759,7 +793,7 @@ const styles = StyleSheet.create({
   },
   sectionTitle: {
     fontSize: 11,
-    fontFamily: 'Poppins-Bold',
+    fontFamily: f('Poppins-Bold'),
     letterSpacing: 1.4,
     color: '#96A0AE',
     textTransform: 'uppercase',
@@ -767,7 +801,7 @@ const styles = StyleSheet.create({
   sectionAction: {
     fontSize: 11,
     color: '#8B94A3',
-    fontFamily: 'Poppins-SemiBold',
+    fontFamily: f('Poppins-SemiBold'),
   },
   sectionActionButton: {
     paddingVertical: 4,
@@ -775,18 +809,18 @@ const styles = StyleSheet.create({
   },
   accentText: {
     color: '#E88800',
-    fontFamily: 'Poppins-Bold',
+    fontFamily: f('Poppins-Bold'),
   },
   liveMarketCard: {
     backgroundColor: '#E88800',
     borderRadius: 20,
     paddingHorizontal: 18,
     paddingVertical: 20,
-    shadowColor: '#C2410C',
-    shadowOffset: { width: 0, height: 10 },
-    shadowOpacity: 0.3,
-    shadowRadius: 16,
-    elevation: 6,
+    shadowColor: '#E8880',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.25,
+    shadowRadius: 12,
+    elevation: 8,
   },
   liveMarketTopRow: {
     flexDirection: 'row',
@@ -810,7 +844,7 @@ const styles = StyleSheet.create({
   },
   liveMarketRateLabel: {
     fontSize: 11,
-    fontFamily: 'Poppins-Bold',
+    fontFamily: f('Poppins-Bold'),
     letterSpacing: 1.2,
     color: '#FFFFFF',
     textTransform: 'uppercase',
@@ -832,13 +866,13 @@ const styles = StyleSheet.create({
   },
   liveMarketLiveText: {
     fontSize: 10,
-    fontFamily: 'Poppins-Bold',
+    fontFamily: f('Poppins-Bold'),
     color: '#FFFFFF',
     letterSpacing: 0.8,
   },
   liveMarketPrice: {
     fontSize: 34,
-    fontFamily: 'Poppins-Black',
+    fontFamily: f('Poppins-Black'),
     color: '#FFFFFF',
     marginTop: 4,
   },
@@ -846,7 +880,7 @@ const styles = StyleSheet.create({
     fontSize: 13,
     color: 'rgba(255,255,255,0.85)',
     marginTop: 2,
-    fontFamily: 'Poppins-Medium',
+    fontFamily: f('Poppins-Medium'),
   },
   liveMarketDivider: {
     height: 1,
@@ -856,7 +890,7 @@ const styles = StyleSheet.create({
   liveMarketFooterCta: {
     textAlign: 'center',
     fontSize: 12,
-    fontFamily: 'Poppins-Bold',
+    fontFamily: f('Poppins-Bold'),
     color: '#FFFFFF',
     letterSpacing: 1,
     textTransform: 'uppercase',
@@ -899,27 +933,28 @@ const styles = StyleSheet.create({
   },
   investmentRupeeIcon: {
     fontSize: 20,
-    fontFamily: 'Poppins-Bold',
+    fontFamily: f('Poppins-Bold'),
     color: '#27AE60',
   },
   investmentCardLabel: {
     fontSize: 10,
-    fontFamily: 'Poppins-SemiBold',
+    fontFamily: f('Poppins-SemiBold'),
     letterSpacing: 1.2,
     color: '#808080',
-    marginBottom: 6,
+    // marginBottom: 6,
     textTransform: 'uppercase',
   },
   investmentCardValue: {
     fontSize: 22,
-    fontFamily: 'Poppins-Black',
+    fontFamily: f('Poppins-Black'),
     color: '#1A1C24',
-    marginBottom: 8,
+    // marginBottom: 8,
   },
   investmentCardSubGold: {
     fontSize: 13,
-    fontFamily: 'Poppins-SemiBold',
+    fontFamily: f('Poppins-SemiBold'),
     color: '#E67E22',
+    marginTop: -2,
   },
   investmentGrowthPill: {
     flexDirection: 'row',
@@ -933,7 +968,7 @@ const styles = StyleSheet.create({
   },
   investmentGrowthText: {
     fontSize: 12,
-    fontFamily: 'Poppins-Bold',
+    fontFamily: f('Poppins-Bold'),
     color: '#27AE60',
   },
   investmentGrowthPlaceholder: {
@@ -970,7 +1005,7 @@ const styles = StyleSheet.create({
   joinButtonText: {
     color: '#FFFFFF',
     fontSize: 13,
-    fontFamily: 'Poppins-Black',
+    fontFamily: f('Poppins-Black'),
     letterSpacing: 1.8,
     flexShrink: 1,
     textAlign: 'center',
@@ -1010,7 +1045,7 @@ const styles = StyleSheet.create({
   },
   schemeName: {
     fontSize: 14,
-    fontFamily: 'Poppins-SemiBold',
+    fontFamily: f('Poppins-SemiBold'),
     color: '#131A28',
   },
   schemeDue: {
@@ -1018,7 +1053,7 @@ const styles = StyleSheet.create({
     fontSize: 10,
     letterSpacing: 0.8,
     color: '#98A2B3',
-    fontFamily: 'Poppins-Medium',
+    fontFamily: f('Poppins-Medium'),
     textTransform: 'uppercase',
   },
   schemeDueOverdue: {
@@ -1029,7 +1064,7 @@ const styles = StyleSheet.create({
   },
   schemeAmount: {
     fontSize: 15,
-    fontFamily: 'Poppins-Black',
+    fontFamily: f('Poppins-Black'),
     color: '#111827',
   },
   activePill: {
@@ -1040,7 +1075,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     borderRadius: 20,
     fontSize: 9,
-    fontFamily: 'Poppins-Bold',
+    fontFamily: f('Poppins-Bold'),
     overflow: 'hidden',
     letterSpacing: 0.5,
   },
@@ -1060,10 +1095,13 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.08,
     shadowRadius: 14,
     elevation: 4,
+    alignSelf: 'flex-start',
   },
   recommendedScrollContent: {
-    paddingRight: 4,
-    gap: 14,
+    paddingLeft: 0,
+    paddingRight: 14,
+    gap: 12,
+    alignItems: 'flex-start',
   },
   recommendedTop: {
     minHeight: 140,
@@ -1092,14 +1130,14 @@ const styles = StyleSheet.create({
   },
   popularTagText: {
     fontSize: 9,
-    fontFamily: 'Poppins-Black',
+    fontFamily: f('Poppins-Black'),
     color: '#FFFFFF',
     letterSpacing: 0.8,
   },
   recommendedTitle: {
     color: '#FFFFFF',
     fontSize: 16,
-    fontFamily: 'Poppins-BoldItalic',
+    fontFamily: f('Poppins-BoldItalic'),
     lineHeight: 22,
   },
   recommendedBody: {
@@ -1115,7 +1153,7 @@ const styles = StyleSheet.create({
     fontSize: 10,
     backgroundColor: '#FFF5E6',
     color: '#E38A00',
-    fontFamily: 'Poppins-Bold',
+    fontFamily: f('Poppins-Bold'),
     paddingHorizontal: 12,
     paddingVertical: 6,
     borderRadius: 20,
@@ -1124,7 +1162,7 @@ const styles = StyleSheet.create({
   fixedText: {
     fontSize: 10,
     color: '#98A2B3',
-    fontFamily: 'Poppins-SemiBold',
+    fontFamily: f('Poppins-SemiBold'),
     letterSpacing: 1,
     textTransform: 'uppercase',
   },
@@ -1135,7 +1173,7 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: '#3A4658',
     marginTop: 8,
-    fontFamily: 'Poppins-Medium',
+    fontFamily: f('Poppins-Medium'),
     lineHeight: 18,
   },
   exploreButton: {
@@ -1144,15 +1182,17 @@ const styles = StyleSheet.create({
     backgroundColor: '#111D36',
     minHeight: 44,
     paddingVertical: 12,
+    paddingHorizontal: 16,
     alignItems: 'center',
     justifyContent: 'center',
   },
   exploreButtonText: {
     color: '#FFFFFF',
-    fontFamily: 'Poppins-Black',
-    fontSize: 11,
-    letterSpacing: 1.6,
+    fontFamily: f('Poppins-Bold'),
+    fontSize: 10,
+    letterSpacing: 1,
     textTransform: 'uppercase',
+    textAlign: 'center',
   },
   marketCard: {
     backgroundColor: '#FFFFFF',
@@ -1173,7 +1213,7 @@ const styles = StyleSheet.create({
   },
   marketTitle: {
     fontSize: 16,
-    fontFamily: 'Poppins-SemiBold',
+    fontFamily: f('Poppins-SemiBold'),
     color: '#121826',
   },
   marketSubTitle: {
@@ -1181,7 +1221,7 @@ const styles = StyleSheet.create({
     fontSize: 10,
     color: '#98A2B3',
     letterSpacing: 0.9,
-    fontFamily: 'Poppins-Medium',
+    fontFamily: f('Poppins-Medium'),
   },
   gainPill: {
     fontSize: 11,
@@ -1191,7 +1231,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 11,
     borderRadius: 999,
     overflow: 'hidden',
-    fontFamily: 'Poppins-SemiBold',
+    fontFamily: f('Poppins-SemiBold'),
   },
   chartBox: {
     marginTop: 14,
@@ -1236,7 +1276,7 @@ const styles = StyleSheet.create({
   },
   currencyDotText: {
     color: '#9CA3AF',
-    fontFamily: 'Poppins-SemiBold',
+    fontFamily: f('Poppins-SemiBold'),
   },
   transactionCenter: {
     flex: 1,
@@ -1244,20 +1284,20 @@ const styles = StyleSheet.create({
   transactionTitle: {
     fontSize: 14,
     color: '#131A28',
-    fontFamily: 'Poppins-SemiBold',
+    fontFamily: f('Poppins-SemiBold'),
   },
   transactionDate: {
     marginTop: 3,
     color: '#94A3B8',
     fontSize: 11,
-    fontFamily: 'Poppins-Medium',
+    fontFamily: f('Poppins-Medium'),
   },
   transactionRight: {
     alignItems: 'flex-end',
   },
   transactionAmount: {
     color: '#131A28',
-    fontFamily: 'Poppins-Black',
+    fontFamily: f('Poppins-Black'),
     fontSize: 15,
   },
   successText: {
@@ -1265,7 +1305,7 @@ const styles = StyleSheet.create({
     color: '#0F9E63',
     fontSize: 9,
     letterSpacing: 0.8,
-    fontFamily: 'Poppins-Bold',
+    fontFamily: f('Poppins-Bold'),
     textTransform: 'uppercase',
   },
   separator: {
@@ -1301,24 +1341,27 @@ const styles = StyleSheet.create({
   },
   supportIconText: {
     color: '#24A764',
-    fontFamily: 'Poppins-SemiBold',
+    fontFamily: f('Poppins-SemiBold'),
   },
   supportTopLabel: {
     color: '#0B6A57',
     letterSpacing: 1,
     fontSize: 10,
-    fontFamily: 'Poppins-SemiBold',
+    fontFamily: f('Poppins-Bold'),
     textTransform: 'uppercase',
+    fontWeight: 'bold',
+    marginTop: 4,
   },
   supportTitle: {
-    marginTop: 3,
+    marginTop: 0,
     color: '#1F2937',
     fontSize: 15,
-    fontFamily: 'Poppins-Bold',
+    fontFamily: f('Poppins-Bold'),
   },
   supportArrow: {
     color: '#22A45E',
     fontSize: 24,
-    fontFamily: 'Poppins-Bold',
+    fontFamily: f('Poppins-Bold'),
   },
-});
+  });
+}

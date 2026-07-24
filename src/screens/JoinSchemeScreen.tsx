@@ -37,7 +37,13 @@ export function JoinSchemeScreen({ navigation, route }: Props) {
     schemeName,
     monthlyAmount,
     maturityLabel,
+    calculationType,
+    schemeTypeId,
+    textAboveAmount,
   } = route.params;
+
+  const isWeightBased = calculationType === 'weight';
+  const isSmartGoldScheme = schemeTypeId === 5;
 
   const [nomineeName, setNomineeName] = useState('');
   const [relationship, setRelationship] = useState('');
@@ -160,7 +166,9 @@ export function JoinSchemeScreen({ navigation, route }: Props) {
 
           <View style={styles.amountCard}>
             <View style={styles.rowBetween}>
-              <Text style={styles.amountLabel}>MONTHLY INSTALLMENT</Text>
+              <Text style={styles.amountLabel}>
+                {(textAboveAmount?.trim() || 'MONTHLY INSTALLMENT').toUpperCase()}
+              </Text>
               <View style={styles.editBadge}>
                 <Ionicons name="create-outline" size={14} color="#E5E7EB" />
               </View>
@@ -170,13 +178,15 @@ export function JoinSchemeScreen({ navigation, route }: Props) {
               <View style={styles.metaSection}>
                 <Text style={styles.metaTop}>PLAN</Text>
                 <Text style={styles.metaValueLight}>{schemeName}</Text>
-                <Text style={styles.metaHint}>per month</Text>
+                {!isSmartGoldScheme && <Text style={styles.metaHint}>per month</Text>}
               </View>
-              <View style={styles.metaSection}>
-                <Text style={styles.metaTop}>MATURITY VALUE</Text>
-                <Text style={styles.metaValueLight}>{maturityDisplay}</Text>
-                <Text style={styles.metaHint}>from selected plan</Text>
-              </View>
+              {maturityLabel && (
+                <View style={styles.metaSection}>
+                  <Text style={styles.metaTop}>{isWeightBased ? 'GOLD EARNED TODAY' : 'MATURITY VALUE'}</Text>
+                  <Text style={styles.metaValueLight}>{maturityDisplay}</Text>
+                  <Text style={styles.metaHint}>from selected plan</Text>
+                </View>
+              )}
             </View>
           </View>
 

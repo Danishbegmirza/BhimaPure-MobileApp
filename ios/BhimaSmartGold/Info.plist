@@ -92,6 +92,12 @@
 		<string>Jost-Bold.ttf</string>
 		<string>Jost-BlackItalic.ttf</string>
 		<string>Jost-MediumItalic.ttf</string>
+		<string>NotoSans_Condensed-Regular.ttf</string>
+		<string>NotoSans_Condensed-Medium.ttf</string>
+		<string>NotoSans_Condensed-SemiBold.ttf</string>
+		<string>NotoSans_Condensed-Bold.ttf</string>
+		<string>NotoSans_Condensed-Black.ttf</string>
+		<string>NotoSans_Condensed-BoldItalic.ttf</string>
 	</array>
 </dict>
 </plist>

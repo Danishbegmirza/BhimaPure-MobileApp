@@ -42,6 +42,8 @@ export interface SchemePopupDetail {
   maturity_date?: string | null;
   nominee_name?: string | null;
   nominee_relation?: string | null;
+  calculation_type?: 'amount' | 'weight' | null;
+  payment_history?: PaymentHistoryItem[];
 }
 
 export interface SchemeNextPayment {
@@ -59,6 +61,23 @@ export interface SchemePopupMetrics {
   total_paid: number;
   eligible_value: number;
   maturity_amount: number;
+  gold_holdings?: string | number | null;
+}
+
+export interface PaymentHistoryItem {
+  installment_amount?: string | number;
+  installment_date?: string;
+  payment_date?: string | null;
+  status_message?: string;
+  transaction_id?: string | null;
+  /** @deprecated legacy API shape */
+  month?: string;
+  /** @deprecated legacy API shape */
+  date?: string;
+  /** @deprecated legacy API shape */
+  amount?: number;
+  /** @deprecated legacy API shape */
+  status?: string;
 }
 
 export interface SchemePopupResponse {
@@ -70,6 +89,12 @@ export interface SchemePopupResponse {
   maturity_date: string | null;
   nominee_name: string | null;
   nominee_relation: string | null;
+  payment_history?: PaymentHistoryItem[];
+  show_gold_holdings?: string | null;
+  show_bonus?: string | null;
+  calculation_type?: 'amount' | 'weight' | null;
+  bonus_value?: number | string | null;
+  scheme_type_id?: number | null;
 }
 
 export async function fetchSchemePopupDetails(
